@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-ARG BASE_IMAGE=ghcr.io/spidernet-io/smartdocter/netknife-base:52b5798da79b82948067b911f341853d1a04d68f@sha256:c939188a6c5c8df6415b8fda55be902dad877e4b1d75076be6cbf807a65a345c
+ARG BASE_IMAGE=ghcr.io/spidernet-io/smartdocter/netknife-base:cd902be37fb5fe6d57c19af8c6be78295e794eb0@sha256:66d93e37f36d20c15b97f580e46630f25d2217d485dee73fce9df55d53cab551
 ARG GOLANG_IMAGE=docker.io/library/golang:1.17.8@sha256:f675106e44f205a7284e15cd75c41b241329f3c03ac30b0ba07b14a6ea7c99d9
 
 # TARGETARCH is an automatic platform ARG enabled by Docker BuildKit.
