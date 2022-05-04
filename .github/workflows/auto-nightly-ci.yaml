@@ -108,7 +108,7 @@ jobs:
   call_build_ci_image:
     needs: [get_ref]
     # get  image:${{ needs.get_ref.outputs.ref }} and image-ci:${{ needs.get_ref.outputs.ref }}
-    uses: ./.github/workflows/build-image-ci.yaml
+    uses: ./.github/workflows/call-release-image.yaml
     with:
       ref: ${{ needs.get_ref.outputs.ref }}
       push: false

@@ -1,10 +1,8 @@
 name: Auto Build Image Base
 
 env:
-  IMAGE_NAME: netknife-base
   IMAGE_REPO: ${{ github.repository }}
   ONLINE_REGISTER: ghcr.io
-  IMAGE_ROOT_PATH: images
   BUILD_PLATFORM: linux/amd64,linux/arm64
   ONLINE_REGISTER_USER: ${{ github.actor }}
   ONLINE_REGISTER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
@@ -37,6 +35,16 @@ jobs:
     timeout-minutes: 30
     environment: release-base-images
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: netknife-base
+            dockerfile: ./images/netknife-base/Dockerfile
+            context: ./images/netknife-base
+          - name: smartdocter-base
+            dockerfile: ./images/smartdocter-base/Dockerfile
+            context: ./images/smartdocter-base
+
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1.7.0
@@ -78,14 +86,14 @@ jobs:
       - name: Generating Base Image Tag
         id: base_tag
         run: |
-          echo ::set-output name=tag::"$(git ls-tree --full-tree HEAD -- ./${{ env.IMAGE_ROOT_PATH }}/${{ env.IMAGE_NAME }} | awk '{ print $3 }')"
+          echo ::set-output name=tag::"$(git ls-tree --full-tree HEAD -- ${{ matrix.context }} | awk '{ print $3 }')"
 
       # check whether we have upload the same base image to online register , if so, we could not build it
       - name: Checking if tag already exists
         id: tag-in-repositories
         shell: bash
         run: |
-          if docker buildx imagetools inspect ${{ env.ONLINE_REGISTER }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{  steps.base_tag.outputs.tag }} &>/dev/null; then
+          if docker buildx imagetools inspect ${{ env.ONLINE_REGISTER }}/${{ env.IMAGE_REPO }}/${{ matrix.name }}:${{  steps.base_tag.outputs.tag }} &>/dev/null; then
             echo ::set-output name=exists::"true"
             echo "the target base image exist , no need to build it "
           else
@@ -101,35 +109,35 @@ jobs:
           password: ${{ env.ONLINE_REGISTER_PASSWORD }}
           registry: ${{ env.ONLINE_REGISTER }}
 
-      - name: Release build ${{ env.IMAGE_NAME }}
+      - name: Release build ${{ matrix.name }}
         if: ${{ steps.tag-in-repositories.outputs.exists == 'false' }}
         uses: docker/build-push-action@v2.10.0
         continue-on-error: false
         id: docker_build_release
         with:
-          context: ./${{ env.IMAGE_ROOT_PATH }}/${{ env.IMAGE_NAME }}
-          file: ./${{ env.IMAGE_ROOT_PATH }}/${{ env.IMAGE_NAME }}/Dockerfile
+          context: ${{ matrix.context }}
+          file: ./${{ matrix.dockerfile }}
           push: true
           github-token: ${{ secrets.WELAN_PAT }}
           platforms: ${{ env.BUILD_PLATFORM }}
           tags: |
-            ${{ env.ONLINE_REGISTER }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.base_tag.outputs.tag }}
+            ${{ env.ONLINE_REGISTER }}/${{ env.IMAGE_REPO }}/${{ matrix.name }}:${{ steps.base_tag.outputs.tag }}
 
       - name: Image Release Digest
         if: ${{ steps.tag-in-repositories.outputs.exists == 'false' }}
         shell: bash
         run: |
           mkdir -p image-digest/
-          echo "## ${{ env.IMAGE_NAME }}" > image-digest/${{ env.IMAGE_NAME }}.txt
-          echo "" >> image-digest/${{ env.IMAGE_NAME }}.txt
-          echo "\`${{ env.ONLINE_REGISTER }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.base_tag.outputs.tag }}@${{ steps.docker_build_release.outputs.digest }}\`" >> image-digest/${{ env.IMAGE_NAME }}.txt
-          echo "" >> image-digest/${{ env.IMAGE_NAME }}.txt
+          echo "## ${{ matrix.name }}" > image-digest/${{ matrix.name }}.txt
+          echo "" >> image-digest/${{ matrix.name }}.txt
+          echo "\`${{ env.ONLINE_REGISTER }}/${{ env.IMAGE_REPO }}/${{ matrix.name }}:${{ steps.base_tag.outputs.tag }}@${{ steps.docker_build_release.outputs.digest }}\`" >> image-digest/${{ matrix.name }}.txt
+          echo "" >> image-digest/${{ matrix.name }}.txt
 
       - name: Upload artifact digests
         if: ${{ steps.tag-in-repositories.outputs.exists == 'false' }}
         uses: actions/upload-artifact@v3.0.0
         with:
-          name: image-digest ${{ env.IMAGE_NAME }}
+          name: image-digest-${{ matrix.name }}
           path: image-digest
           retention-days: 1
 

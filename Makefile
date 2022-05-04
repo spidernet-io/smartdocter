@@ -129,6 +129,31 @@ lint-yaml:
 		if (($$?==0)) ; then echo "congratulations ,all pass" ; else echo "error, pealse refer <https://yamllint.readthedocs.io/en/stable/rules.html> " ; fi
 
 
+.PHONY: lint-code-spell
+lint-code-spell:
+	$(QUIET) if ! which codespell &> /dev/null ; then \
+  				echo "try to install codespell" ; \
+  				if ! pip3 install codespell ; then \
+  					echo "error, miss tool codespell, install it: pip3 install codespell" ; \
+  					exit 1 ; \
+  				fi \
+  			fi ;\
+  			codespell --config .github/codespell-config
+
+
+.PHONY: fix-code-spell
+fix-code-spell:
+	$(QUIET) if ! which codespell &> /dev/null ; then \
+  				echo "try to install codespell" ; \
+  				if ! pip3 install codespell ; then \
+  					echo "error, miss tool codespell, install it: pip3 install codespell" ; \
+  					exit 1 ;\
+  				fi \
+  			fi; \
+  			codespell --config .github/codespell-config  --write-changes
+
+
+
 .PHONY: unitest-tests
 unitest-tests: UNITEST_DIR := netknifeCmd smartdocterCmd
 unitest-tests:
