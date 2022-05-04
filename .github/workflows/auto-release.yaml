@@ -56,17 +56,36 @@ jobs:
       ref: ${{ needs.get-tag.outputs.tag }}
       push: 'true'
 
+  release-chart:
+    needs: [build-release-image, get-tag]
+    uses: ./.github/workflows/call-release-chart.yaml
+    with:
+      ref: ${{ needs.get-tag.outputs.tag }}
+      submit: true
+
   release-changelog:
     needs: [build-release-image, get-tag]
     uses: ./.github/workflows/call-release-changelog.yaml
     with:
       dest_tag: ${{ needs.get-tag.outputs.tag }}
 
+  release-doc:
+    needs: [build-release-image, get-tag]
+    uses: ./.github/workflows/call-release-doc.yaml
+    with:
+      ref: ${{ needs.get-tag.outputs.tag }}
+
   create-release:
-    needs: [release-changelog, get-tag]
+    needs: [release-chart, release-changelog, get-tag]
     name: create release
     runs-on: ubuntu-latest
     steps:
+      - name: Download Chart Artifact
+        uses: actions/download-artifact@v3.0.0
+        with:
+          name: ${{ needs.release-chart.outputs.artifact }}
+          path: chart-package/
+
       - name: Download Changelog Artifact
         uses: actions/download-artifact@v3.0.0
         with:
@@ -76,6 +95,13 @@ jobs:
       - name: Get Downloaded Files
         id: download_file
         run: |
+          # ========= chart
+          if ! ls chart-package/*.tgz &>/dev/null ; then
+              echo "error, failed to find any chart "
+              exit 1
+          fi
+          chart_path=$( ls chart-package/*.tgz )
+          echo ::set-output name=chart_path::${chart_path}
           # ========== changelog
           if ! ls changelog-result/*.md &>/dev/null ; then
               echo "error, failed to find changelog "
@@ -93,7 +119,11 @@ jobs:
         continue-on-error: false
         uses: ncipollo/release-action@v1.10.0
         with:
+          artifacts: "chart-package/*"
           allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: true
           bodyFile: "./changelog-result/changelog.md"
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.get-tag.outputs.tag }}

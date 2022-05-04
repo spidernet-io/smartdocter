@@ -1,0 +1,25 @@
+*  @weizhouBlue @lou-lan
+/.github/ @weizhoublue
+/api/ @weizhoublue
+/charts/ @weizhoublue
+/cmd/ @weizhoublue
+/contrib/ @weizhoublue
+/docs/ @weizhoublue
+/images/ @weizhoublue
+/pkg/ @weizhoublue
+/static/ @weizhoublue
+/test/ @weizhoublue
+/tools/ @weizhoublue
+/vendor/ @weizhoublue
+/.gitignore @weizhoublue
+/CODEOWNERS @weizhoublue
+/go.mod @weizhoublue
+/LICENSE @weizhoublue
+/Makefile* @weizhoublue
+/README.md @weizhoublue
+/go.sum @weizhoublue
+/VERSION @weizhoublue
+/AUTHORS @weizhoublue
+/.licenserc.yaml @weizhoublue
+/codecov.yml @weizhoublue
+/.golangci.yaml @weizhoublue

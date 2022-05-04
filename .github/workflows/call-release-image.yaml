@@ -30,6 +30,9 @@ jobs:
           - name: netknife
             dockerfile: ./images/netknife/Dockerfile
             context: ./
+          - name: smartdocter
+            dockerfile: ./images/smartdocter/Dockerfile
+            context: ./
 
     steps:
       - name: Set up Docker Buildx

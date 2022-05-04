@@ -10,6 +10,8 @@ yaml-files:
 # For all rules
 ignore: |
   vendor/
+  charts/
+
 
 rules:
   line-length: disable

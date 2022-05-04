@@ -1,7 +1,8 @@
 name: Badge Status
 
 env:
-  CODESTATUSSCRIPT: "./tools/codeCoverage.sh"
+  CODESTATUSSCRIPT: "./tools/scripts/codeCoverage.sh"
+  E2ESTATUSSCRIPT: "./tools/scripts/e2ecover.sh"
 
 on:
   push:
@@ -28,13 +29,38 @@ jobs:
           COMMENT_PERCENTAGE=$(  ${TOOL_PATH} --comment-percent )
           echo "CODE_LINES=${CODE_LINES}" >> $GITHUB_ENV
           echo "COMMENT_PERCENTAGE=${COMMENT_PERCENTAGE}" >> $GITHUB_ENV
+          TOOL_PATH=${{ env.E2ESTATUSSCRIPT }}
+          E2E_STATUS=$( ${TOOL_PATH} )
+          echo "E2E_STATUS=${E2E_STATUS}" >> $GITHUB_ENV
 
       - name: Create Lines-of-Code-Badge
         uses: schneegans/dynamic-badges-action@v1.3.0
         with:
           auth: ${{ secrets.WELAN_PAT }}
           gistID: d0f9348f23d4a0c20d369a3d27e7cd3f
-          filename: netknifecodeline.json
+          filename: 
           label: Code Lines
           message: ${{ env.CODE_LINES }}
+          color: lightgrey
+
+      - name: Create Comments-Badge
+        uses: schneegans/dynamic-badges-action@v1.3.0
+        with:
+          auth: ${{ secrets.WELAN_PAT }}
+          gistID: 
+          filename:
+          label: Comments
+          message: ${{ env.COMMENT_PERCENTAGE }}%
+          valColorRange: ${{ env.COMMENT_PERCENTAGE }}
+          maxColorRange: 100
+          minColorRange: 0
+
+      - name: Create E2E-Badge
+        uses: schneegans/dynamic-badges-action@v1.3.0
+        with:
+          auth: ${{ secrets.WELAN_PAT }}
+          gistID: 
+          filename:
+          label: e2e
+          message: ${{ env.E2E_STATUS }}
           color: lightgrey
