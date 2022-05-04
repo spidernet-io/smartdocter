@@ -1,8 +1,8 @@
 name: Badge Status
 
 env:
-  CODESTATUSSCRIPT: "./tools/scripts/codeCoverage.sh"
-  E2ESTATUSSCRIPT: "./tools/scripts/e2ecover.sh"
+  CODESTATUSSCRIPT: "./tools/codeCoverage.sh"
+  E2ESTATUSSCRIPT: "./tools/e2ecover.sh"
 
 on:
   push:
@@ -37,8 +37,8 @@ jobs:
         uses: schneegans/dynamic-badges-action@v1.3.0
         with:
           auth: ${{ secrets.WELAN_PAT }}
-          gistID: d0f9348f23d4a0c20d369a3d27e7cd3f
-          filename: 
+          gistID: 5a49a2a9466bfbcfcc7a277b6af1bbae
+          filename: smartdoctercodeline.json
           label: Code Lines
           message: ${{ env.CODE_LINES }}
           color: lightgrey
@@ -47,8 +47,8 @@ jobs:
         uses: schneegans/dynamic-badges-action@v1.3.0
         with:
           auth: ${{ secrets.WELAN_PAT }}
-          gistID: 
-          filename:
+          gistID: 168d810ac3b6d2a17ab0877b738357a9
+          filename: smartdoctercomment.json
           label: Comments
           message: ${{ env.COMMENT_PERCENTAGE }}%
           valColorRange: ${{ env.COMMENT_PERCENTAGE }}
@@ -59,8 +59,8 @@ jobs:
         uses: schneegans/dynamic-badges-action@v1.3.0
         with:
           auth: ${{ secrets.WELAN_PAT }}
-          gistID: 
-          filename:
+          gistID: 93ab72774cd3a028c4facd7ce5720f90
+          filename: smartdoctere2e.json
           label: e2e
           message: ${{ env.E2E_STATUS }}
           color: lightgrey

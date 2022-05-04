@@ -102,7 +102,10 @@ func rootmain(cmd *cobra.Command, args []string) {
 		*forceUnhealthy = true
 		w.WriteHeader(200)
 		data := (time.Since(started)).String()
-		w.Write([]byte(data))
+		_, e := w.Write([]byte(data))
+		if e != nil {
+			log.Fatalf("Error from Write(): %s", e)
+		}
 	})
 
 	http.HandleFunc("/make-serving", func(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +114,10 @@ func rootmain(cmd *cobra.Command, args []string) {
 		*forceUnhealthy = false
 		w.WriteHeader(200)
 		data := (time.Since(started)).String()
-		w.Write([]byte(data))
+		_, e := w.Write([]byte(data))
+		if e != nil {
+			log.Fatalf("Error from Write(): %s", e)
+		}
 	})
 
 	go func() {

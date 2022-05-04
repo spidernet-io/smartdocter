@@ -45,12 +45,16 @@ endef
 
 
 .PHONY: build_local_image
-build_local_image: build_local_netknife_image
-
+build_local_image: build_local_netknife_image build_local_smartdocter_image
 
 .PHONY: build_local_netknife_image
 build_local_netknife_image: FINAL_IMAGES := ${REGISTER}/${GIT_REPO}/netknife
 build_local_netknife_image:
+	@ $(BUILD_FINAL_IMAGE)
+
+.PHONY: build_local_smartdocter_image
+build_local_smartdocter_image: FINAL_IMAGES := ${REGISTER}/${GIT_REPO}/smartdocter
+build_local_smartdocter_image:
 	@ $(BUILD_FINAL_IMAGE)
 
 
@@ -79,6 +83,13 @@ build_local_netknife_base_image:
 	@ $(BUILD_BASE_IMAGE)
 
 
+.PHONY: build_local_smartdocter_base_image
+build_local_smartdocter_base_image: IMAGEDIR := ./images/smartdocter-base
+build_local_smartdocter_base_image: BASE_IMAGES := ${REGISTER}/${GIT_REPO}/smartdocter-base
+build_local_smartdocter_base_image:
+	@ $(BUILD_BASE_IMAGE)
+
+
 # ==========================
 
 .PHONY: package-charts
@@ -86,7 +97,7 @@ package-charts:
 	@ make -C charts package
 
 .PHONY: lint-golang
-lint-golang: LINT_DIR := ./netknifeCmd/...
+lint-golang: LINT_DIR := ./netknifeCmd/... ./smartdocterCmd/...
 lint-golang:
 	$(QUIET) tools/check-go-fmt.sh
 	$(QUIET) $(GO_VET)  $(LINT_DIR)
@@ -119,7 +130,7 @@ lint-yaml:
 
 
 .PHONY: unitest-tests
-unitest-tests: UNITEST_DIR := netknifeCmd
+unitest-tests: UNITEST_DIR := netknifeCmd smartdocterCmd
 unitest-tests:
 	@echo "run unitest-tests"
 	$(QUIET) $(ROOT_DIR)/tools/ginkgo.sh   \
@@ -128,3 +139,20 @@ unitest-tests:
 		-randomize-suites -randomize-all --keep-going  --timeout=1h  -p   --slow-spec-threshold=120s \
 		-vv  -r   $(UNITEST_DIR)
 	$(QUIET) go tool cover -html=./coverage.out -o coverage-all.html
+
+
+# should label for each test file
+.PHONY: check_test_label
+check_test_label:
+	@ALL_TEST_FILE=` find  ./  -name "*_test.go" -not -path "./vendor/*" ` ; FAIL="false" ; \
+		for ITEM in $$ALL_TEST_FILE ; do \
+			[[ "$$ITEM" == *_suite_test.go ]] && continue  ; \
+			! grep 'Label(' $${ITEM} &>/dev/null && FAIL="true" && echo "error, miss Label in $${ITEM}" ; \
+		done ; \
+		[ "$$FAIL" == "true" ] && echo "error, label check fail" && exit 1 ; \
+		echo "each test.go is labeled right"
+
+
+.PHONY: e2e
+e2e:
+	@echo "run e2e"

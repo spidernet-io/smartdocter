@@ -1,17 +1,17 @@
 *  @weizhouBlue @lou-lan
 /.github/ @weizhoublue
-/api/ @weizhoublue
 /charts/ @weizhoublue
-/cmd/ @weizhoublue
 /contrib/ @weizhoublue
-/docs/ @weizhoublue
 /images/ @weizhoublue
-/pkg/ @weizhoublue
-/static/ @weizhoublue
+/netknifeCmd/ @weizhoublue
+/scripts/ @weizhoublue
+/smartdocterCmd/ @weizhoublue
 /test/ @weizhoublue
 /tools/ @weizhoublue
 /vendor/ @weizhoublue
 /.gitignore @weizhoublue
+/.golangci.yaml @weizhoublue
+/.licenserc.yaml @weizhoublue
 /CODEOWNERS @weizhoublue
 /go.mod @weizhoublue
 /LICENSE @weizhoublue
@@ -20,6 +20,4 @@
 /go.sum @weizhoublue
 /VERSION @weizhoublue
 /AUTHORS @weizhoublue
-/.licenserc.yaml @weizhoublue
 /codecov.yml @weizhoublue
-/.golangci.yaml @weizhoublue

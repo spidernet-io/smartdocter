@@ -52,6 +52,7 @@ outgoing
 *cscope.po.out
 *tags
 .gdb_history
+output_charts
 
 man/
 

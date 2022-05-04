@@ -1,9 +1,5 @@
 name: Auto Nightly CI
 
-env:
-  CLUSTER_NAME: spider
-  E2E_TIME_OUT: 60m
-
 on:
   schedule:
     # each day
@@ -23,7 +19,6 @@ on:
         description: 'sha, tag, branch'
         required: true
         default: main
-
       e2e_labels:
         description: 'e2e labels(if not set, ginkgo will run all test, multi labels separated by commas)'
         required: false
@@ -158,70 +153,7 @@ jobs:
           go-version: ^1.17
           id: go
 
-      - name: Install Tools
-        run: |
-          # install kind/p2ctl/helm/ginkgo
-          bash ./test/scripts/install-tools.sh
-
-      - name: Init Kind Cluster
-        run: |
-          make -C test kind-init
-
-      - name: Download spiderpool-agent image
-        uses: actions/download-artifact@v2
-        with:
-          name: image-tar-spiderpool-agent
-          path: test/.download
-
-      - name: Download spiderpool-controller image
-        uses: actions/download-artifact@v2
-        with:
-          name: image-tar-spiderpool-controller
-          path: test/.download
-
-      - name: Load Image to Kind
-        run: |
-          make load-image-to-kind  E2E_CLUSTER_NAME=${{ env.CLUSTER_NAME }}
-
-      - name: Helm Install Spiderpool
-        uses: nick-invision/retry@v2
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          shell: bash
-          command: |
-            make apply-chart-to-kind  E2E_CLUSTER_NAME=${{ env.CLUSTER_NAME }}
-
       - name: Run e2e
-        id: e2e
-        continue-on-error: true
         run: |
-          echo ${{ github.event.inputs.labels }}
-          make -C test e2e-test E2E_CLUSTER_NAME=${{ env.CLUSTER_NAME }} E2E_GINKGO_LABELS=${{ needs.get_ref.outputs.e2e_labels }} E2E_TIMEOUT=${{ env.E2E_TIME_OUT }}
-          if (($?==0)) ; then
-              echo ::set-output name=pass::true
-          else
-              echo ::set-output name=pass::false
-          fi
-          if [ -f "./e2ereport.json" ] ; then
-              echo "error, did not find e2e report"
-              echo ::set-output name=upload::true
-          else
-              echo ::set-output name=upload::false
-          fi
+          make e2e
 
-      - name: Upload e2e report
-        if: ${{ steps.e2e.outputs.upload == 'true' }}
-        uses: actions/upload-artifact@v3.0.0
-        with:
-          name: e2ereport.json
-          path: e2ereport.json
-          retention-days: 1
-
-      - name: Show e2e Result
-        run: |
-          if ${{ steps.e2e.outputs.pass == 'true' }} ;then
-              exit 0
-          else
-              exit 1
-          fi

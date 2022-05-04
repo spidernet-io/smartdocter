@@ -44,16 +44,25 @@ func rootmain(cmd *cobra.Command, args []string) {
 	http.HandleFunc("/started", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		data := (time.Since(started)).String()
-		w.Write([]byte(data))
+		_, e := w.Write([]byte(data))
+		if e != nil {
+			log.Fatalf("Error from Write(): %s", e)
+		}
 	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		duration := time.Since(started)
 		if duration.Seconds() > 10 {
 			w.WriteHeader(500)
-			w.Write([]byte(fmt.Sprintf("error: %v", duration.Seconds())))
+			_, e := w.Write([]byte(fmt.Sprintf("error: %v", duration.Seconds())))
+			if e != nil {
+				log.Fatalf("Error from Write(): %s", e)
+			}
 		} else {
 			w.WriteHeader(200)
-			w.Write([]byte("ok"))
+			_, e := w.Write([]byte("ok"))
+			if e != nil {
+				log.Fatalf("Error from Write(): %s", e)
+			}
 		}
 	})
 	http.HandleFunc("/redirect", func(w http.ResponseWriter, r *http.Request) {

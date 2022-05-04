@@ -45,8 +45,6 @@ jobs:
               - '**/*.go'
               - 'go.mod'
               - 'go.sum'
-              - 'api/**/openapi.yaml'
-              - 'charts/**/crds/*.yaml'
 
       - name: Result
         id: result

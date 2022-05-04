@@ -78,7 +78,10 @@ func rootmain(cmd *cobra.Command, args []string) {
 					log.Fatalf("Error from Accept(): %s", err)
 				}
 				log.Printf("TCP request from %s", conn.RemoteAddr().String())
-				conn.Write([]byte(hostname))
+				_, e := conn.Write([]byte(hostname))
+				if e != nil {
+					log.Fatalf("Error from Write(): %s", e)
+				}
 				conn.Close()
 			}
 		}()
@@ -100,7 +103,10 @@ func rootmain(cmd *cobra.Command, args []string) {
 					log.Fatalf("Error from ReadFrom(): %s", err)
 				}
 				log.Printf("UDP request from %s", cliAddr.String())
-				sock.WriteTo([]byte(hostname), cliAddr)
+				_, e := sock.WriteTo([]byte(hostname), cliAddr)
+				if e != nil {
+					log.Fatalf("Error from Write(): %s", e)
+				}
 			}
 		}()
 	}

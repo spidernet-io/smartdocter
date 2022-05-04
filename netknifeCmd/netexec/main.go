@@ -462,7 +462,10 @@ func dialUDP(request string, addr net.Addr) (string, error) {
 		return "", fmt.Errorf("udp connection write failed. err:%v", err)
 	}
 	udpResponse := make([]byte, 2048)
-	Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	e := Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if e != nil {
+		return "", fmt.Errorf("SetReadDeadline failed. err:'%v'", e)
+	}
 	count, err := Conn.Read(udpResponse)
 	if err != nil || count == 0 {
 		return "", fmt.Errorf("reading from udp connection failed. err:'%v'", err)
@@ -483,7 +486,10 @@ func dialSCTP(request string, addr net.Addr) (string, error) {
 		return "", fmt.Errorf("sctp connection write failed. err:%v", err)
 	}
 	sctpResponse := make([]byte, 1024)
-	Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	e := Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if e != nil {
+		return "", fmt.Errorf("SetReadDeadline failed. err:'%v'", e)
+	}
 	count, err := Conn.Read(sctpResponse)
 	if err != nil || count == 0 {
 		return "", fmt.Errorf("reading from sctp connection failed. err:'%v'", err)
@@ -618,7 +624,7 @@ func startUDPServer(address string, udpPort int) {
 	}()
 	for {
 		n, clientAddress, err := serverConn.ReadFromUDP(buf)
-		assertNoError(err, fmt.Sprintf("failed accepting UDP connections"))
+		assertNoError(err, "failed accepting UDP connections")
 		receivedText := strings.ToLower(strings.TrimSpace(string(buf[0:n])))
 		if receivedText == "hostname" {
 			log.Println("Sending udp hostName response")
@@ -661,7 +667,7 @@ func startSCTPServer(sctpPort int) {
 	}()
 	for {
 		conn, err := listener.AcceptSCTP()
-		assertNoError(err, fmt.Sprintf("failed accepting SCTP connections"))
+		assertNoError(err, "failed accepting SCTP connections")
 		clientAddress := conn.RemoteAddr().String()
 		n, err := conn.Read(buf)
 		assertNoError(err, fmt.Sprintf("failed to read from SCTP client %s", clientAddress))
