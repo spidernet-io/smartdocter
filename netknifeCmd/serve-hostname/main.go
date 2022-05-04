@@ -16,7 +16,7 @@ limitations under the License.
 
 // A small utility to just serve the hostname on TCP and/or UDP.
 
-package servehostname
+package main
 
 import (
 	"fmt"
@@ -37,7 +37,7 @@ var CmdServeHostname = &cobra.Command{
 	Short: "Serves the hostname",
 	Long:  `Serves the hostname through HTTP / TCP / UDP on the given port.`,
 	Args:  cobra.MaximumNArgs(0),
-	Run:   main,
+	Run:   rootmain,
 }
 
 var (
@@ -56,7 +56,7 @@ func init() {
 	CmdServeHostname.Flags().IntVar(&port, "port", 9376, "Port number.")
 }
 
-func main(cmd *cobra.Command, args []string) {
+func rootmain(cmd *cobra.Command, args []string) {
 	if doHTTP && (doTCP || doUDP) {
 		log.Fatalf("Can't server TCP/UDP mode and HTTP mode at the same time")
 	}
@@ -127,4 +127,11 @@ func main(cmd *cobra.Command, args []string) {
 	log.Printf("Shutting down after receiving signal: %s.\n", sig)
 	log.Printf("Awaiting pod deletion.\n")
 	time.Sleep(60 * time.Second)
+}
+
+func main() {
+	if err := CmdServeHostname.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

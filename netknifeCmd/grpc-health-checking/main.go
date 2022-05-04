@@ -15,13 +15,14 @@ limitations under the License.
 */
 
 // Package grpchealthchecking offers a tiny grpc health checking endpoint.
-package grpchealthchecking
+package main
 
 import (
 	"context"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"net/http"
@@ -40,7 +41,7 @@ var CmdGrpcHealthChecking = &cobra.Command{
 	Short: "Starts a simple grpc health checking endpoint",
 	Long:  "Starts a simple grpc health checking endpoint with --port to serve on and --service to check status for. The endpoint returns SERVING for the first --delay-unhealthy-sec, and NOT_SERVING after this. NOT_FOUND will be returned for the requests for non-configured service name. Probe can be forced to be set NOT_SERVING by calling /make-not-serving http endpoint.",
 	Args:  cobra.MaximumNArgs(0),
-	Run:   main,
+	Run:   rootmain,
 }
 
 var (
@@ -92,7 +93,7 @@ func NewHealthChecker(started time.Time) *HealthChecker {
 	}
 }
 
-func main(cmd *cobra.Command, args []string) {
+func rootmain(cmd *cobra.Command, args []string) {
 	started := time.Now()
 
 	http.HandleFunc("/make-not-serving", func(w http.ResponseWriter, r *http.Request) {
@@ -135,4 +136,12 @@ func main(cmd *cobra.Command, args []string) {
 	}
 
 	select {}
+}
+
+func main() {
+	if err := CmdGrpcHealthChecking.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 }

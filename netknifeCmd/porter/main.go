@@ -20,7 +20,7 @@ limitations under the License.
 // port number, porter starts an HTTP server which serves the env var's value
 // in response to any query.
 
-package porter
+package main
 
 import (
 	"encoding/json"
@@ -53,7 +53,7 @@ The included "localhost.crt" is a PEM-encoded TLS cert with SAN IPs "127.0.0.1" 
 
 To use a different cert/key, mount them into the pod and set the "CERT_FILE" and "KEY_FILE" environment variables to the desired paths.`,
 	Args: cobra.MaximumNArgs(0),
-	Run:  main,
+	Run:  rootmain,
 }
 
 // JSONResponse enables --json-response flag
@@ -68,7 +68,7 @@ func init() {
 	CmdPorter.Flags().BoolVar(&JSONResponse, "json-response", false, "Responds to requests with a json response that includes the default value with the http.Request Method")
 }
 
-func main(cmd *cobra.Command, args []string) {
+func rootmain(cmd *cobra.Command, args []string) {
 	for _, vk := range os.Environ() {
 		// Put everything before the first = sign in parts[0], and
 		// everything else in parts[1] (even if there are multiple =
@@ -178,5 +178,12 @@ func serveSCTPPort(port, value string) {
 			}
 			log.Println("Response sent")
 		}(conn)
+	}
+}
+
+func main() {
+	if err := CmdPorter.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }

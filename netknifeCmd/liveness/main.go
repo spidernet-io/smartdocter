@@ -17,13 +17,14 @@ limitations under the License.
 // A simple server that is alive for 10 seconds, then reports unhealthy for
 // the rest of its (hopefully) short existence.
 
-package liveness
+package main
 
 import (
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -35,10 +36,10 @@ var CmdLiveness = &cobra.Command{
 	Short: "Starts a server that is alive for 10 seconds",
 	Long:  "A simple server that is alive for 10 seconds, then reports unhealthy for the rest of its (hopefully) short existence",
 	Args:  cobra.MaximumNArgs(0),
-	Run:   main,
+	Run:   rootmain,
 }
 
-func main(cmd *cobra.Command, args []string) {
+func rootmain(cmd *cobra.Command, args []string) {
 	started := time.Now()
 	http.HandleFunc("/started", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -64,4 +65,11 @@ func main(cmd *cobra.Command, args []string) {
 		http.Redirect(w, r, loc, http.StatusFound)
 	})
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func main() {
+	if err := CmdLiveness.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

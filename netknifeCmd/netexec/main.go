@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package netexec
+package main
 
 import (
 	"context"
@@ -124,7 +124,14 @@ Additionally, if (and only if) --sctp-port is passed, it will start an SCTP serv
 responding to the same commands as the UDP server.
 `,
 	Args: cobra.MaximumNArgs(0),
-	Run:  main,
+	Run:  rootmain,
+}
+
+func main() {
+	if err := CmdNetexec.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
 
 func init() {
@@ -159,7 +166,7 @@ func (a *atomicBool) get() bool {
 	return atomic.LoadInt32(&a.v) == 1
 }
 
-func main(cmd *cobra.Command, args []string) {
+func rootmain(cmd *cobra.Command, args []string) {
 	exitCh := make(chan shutdownRequest)
 
 	if delayShutdown > 0 {

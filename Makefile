@@ -6,9 +6,9 @@ all:
 # ----------------
 
 define BUILD_BIN
-echo "begin to build bin for $(CMD_BIN_DIR)" ; mkdir -p $(DESTDIR_BIN) ;
-	BIN_NAME_LIST=`cd $(CMD_BIN_DIR) && ls ` ; \
-	 for BIN_NAME in $$(BIN_NAME_LIST); do \
+echo "begin to build bin for $(CMD_BIN_DIR)" ; mkdir -p $(DESTDIR_BIN) ; \
+   BIN_NAME_LIST=$$( cd $(CMD_BIN_DIR) && ls ) ; \
+   for BIN_NAME in $${BIN_NAME_LIST} ; do \
   		rm -f $(DESTDIR_BIN)/$${BIN_NAME} ; \
   		$(GO_BUILD) -o $(DESTDIR_BIN)/$${BIN_NAME}  $(CMD_BIN_DIR)/$${BIN_NAME}/main.go ; \
   		(($$?!=0)) && echo "error, failed to build $${BIN_NAME}" && exit 1 ; \
@@ -40,7 +40,7 @@ echo "Build Image with tag: $(GIT_COMMIT_VERSION)" ; \
 				--file $(ROOT_DIR)/images/"$${FINAL_IMAGES##*/}"/Dockerfile \
 				--output type=docker \
 				--tag $${FINAL_IMAGES}:$(GIT_COMMIT_VERSION) . ; \
-		echo "build success for $${i}:$(GIT_COMMIT_VERSION) " ; \
+		echo "build success for $${i}:$(GIT_COMMIT_VERSION) "
 endef
 
 
