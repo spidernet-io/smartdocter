@@ -1,3 +1,5 @@
+// Copyright Authors of Kubernetes.
+
 /*
 Copyright 2022 The Kubernetes Authors.
 

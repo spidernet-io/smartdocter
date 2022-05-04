@@ -128,6 +128,26 @@ lint-yaml:
 		-c '/usr/bin/yamllint -c /data/.github/yamllint-conf.yml /data' ; \
 		if (($$?==0)) ; then echo "congratulations ,all pass" ; else echo "error, pealse refer <https://yamllint.readthedocs.io/en/stable/rules.html> " ; fi
 
+.PHONY: lint-markdown-spell
+lint-markdown-spell:
+	if which mdspell &>/dev/null ; then \
+  			mdspell  -r --en-us --ignore-numbers --target-relative .github/.spelling --ignore-acronyms  '**/*.md' '!vendor/**/*.md' ; \
+  		else \
+			$(CONTAINER_ENGINE) container run --rm \
+				--entrypoint bash -v $(ROOT_DIR):/workdir  weizhoulan/spellcheck:latest  \
+				-c "cd /workdir ; mdspell  -r --en-us --ignore-numbers --target-relative .github/.spelling --ignore-acronyms  '**/*.md' '!vendor/**/*.md' " ; \
+  		fi
+
+.PHONY: lint-markdown-spell-colour
+lint-markdown-spell-colour:
+	if which mdspell &>/dev/null ; then \
+  			mdspell  -r --en-us --ignore-numbers --target-relative .github/.spelling --ignore-acronyms  '**/*.md' '!vendor/**/*.md' ; \
+  		else \
+			$(CONTAINER_ENGINE) container run --rm -it \
+				--entrypoint bash -v $(ROOT_DIR):/workdir  weizhoulan/spellcheck:latest  \
+				-c "cd /workdir ; mdspell  -r --en-us --ignore-numbers --target-relative .github/.spelling --ignore-acronyms  '**/*.md' '!vendor/**/*.md' " ; \
+  		fi
+
 
 .PHONY: lint-code-spell
 lint-code-spell:

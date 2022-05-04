@@ -86,7 +86,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # update /index.yaml in the target branch
+  #  update /index.yaml in the target branch
   #  update_githubpage:
   #    runs-on: ubuntu-latest
   #    needs: [package_chart, get_ref]
