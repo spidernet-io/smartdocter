@@ -1,0 +1,42 @@
+name: Auto Build Image CI
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+      - release-*
+
+permissions: write-all
+
+jobs:
+  get-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.get_ref.outputs.ref }}
+    steps:
+      - name: Get Ref
+        id: get_ref
+        run: |
+          if ${{ github.event_name == 'pull_request_target' }} ; then
+            echo "call by self pull_request_target"
+            echo ::set-output name=ref::${{ github.event.pull_request.head.sha }}
+          elif ${{ github.event_name == 'push' }} ; then
+            echo "call by push "
+            echo ::set-output name=ref::${{ github.sha }}
+          else
+            echo "unexpected event: ${{ github.event_name }}"
+            exit 1
+          fi
+
+  call-workflow:
+    needs: get-ref
+    uses: ./.github/workflows/call-release-image.yaml
+    with:
+      ref: ${{ needs.get-ref.outputs.ref }}
+      suffix: 'ci'
+      push: "false"
