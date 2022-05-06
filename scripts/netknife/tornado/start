@@ -1,6 +1,0 @@
-#!/bin/bash
-
-set -x
-echo "start L7 load test"
-
-
