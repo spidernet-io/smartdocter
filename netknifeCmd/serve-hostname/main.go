@@ -1,4 +1,5 @@
 // Copyright Authors of Kubernetes.
+// SPDX-License-Identifier: Apache-2.0
 
 /*
 Copyright 2014 The Kubernetes Authors.

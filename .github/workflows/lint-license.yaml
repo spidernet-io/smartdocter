@@ -51,3 +51,6 @@ jobs:
       - name: Check License Header
         id: checklicense
         uses: apache/skywalking-eyes@main
+        with:
+          log: debug
+          config: .licenserc.yaml
