@@ -3,13 +3,13 @@ module smartdocter
 go 1.17
 
 require (
-	fortio.org/fortio v1.28.0
+	fortio.org/fortio v1.32.2
 	github.com/ishidawataru/sctp v0.0.0-20210707070123-9a39160e9062
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
 	github.com/spf13/cobra v1.3.0
 	github.com/wcharczuk/go-chart v2.0.1+incompatible
-	google.golang.org/grpc v1.44.0
+	google.golang.org/grpc v1.46.0
 	k8s.io/apimachinery v0.23.6
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 )
@@ -24,8 +24,8 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/image v0.0.0-20220413100746-70e8d0d3baa9 // indirect
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
-	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
+	golang.org/x/net v0.0.0-20220524220425-1d687d428aca // indirect
+	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.10 // indirect
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
