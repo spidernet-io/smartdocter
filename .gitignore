@@ -85,3 +85,6 @@ images/*/Dockerfile.dockerignore
 bin
 
 p99.svg
+# e2e tmp path
+test/.cluster
+test/.download

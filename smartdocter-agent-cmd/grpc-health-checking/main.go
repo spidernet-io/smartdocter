@@ -132,7 +132,7 @@ func rootmain(cmd *cobra.Command, args []string) {
 	serverAdr := fmt.Sprintf(":%d", port)
 	listenAddr, err := net.Listen("tcp", serverAdr)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Error while starting the listening service %v", err.Error()))
+		log.Fatalf(fmt.Sprintf("Error while starting the listening service %v", err.Error()))
 	}
 
 	grpcServer := grpc.NewServer()
@@ -141,7 +141,7 @@ func rootmain(cmd *cobra.Command, args []string) {
 
 	log.Printf("gRPC server starting to listen on %s", serverAdr)
 	if err = grpcServer.Serve(listenAddr); err != nil {
-		log.Fatal(fmt.Sprintf("Error while starting the gRPC server on the %s listen address %v", listenAddr, err.Error()))
+		log.Fatalf(fmt.Sprintf("Error while starting the gRPC server on the %s listen address %v", listenAddr, err.Error()))
 	}
 
 	select {}

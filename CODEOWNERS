@@ -3,9 +3,9 @@
 /charts/ @weizhoublue
 /contrib/ @weizhoublue
 /images/ @weizhoublue
-/netknifeCmd/ @weizhoublue
+/smartdocter-agent-cmd/ @weizhoublue
 /scripts/ @weizhoublue
-/smartdocterCmd/ @weizhoublue
+/smartdocter-controller-cmd/ @weizhoublue
 /test/ @weizhoublue
 /tools/ @weizhoublue
 /vendor/ @weizhoublue
@@ -21,3 +21,4 @@
 /VERSION @weizhoublue
 /AUTHORS @weizhoublue
 /codecov.yml @weizhoublue
+/docs/ @weizhoublue

@@ -14,6 +14,8 @@ on:
         required: true
         default: main
 
+permissions: write-all
+
 env:
   MERGE_BRANCH: github_pages
   SRC_DIRECTORY: 'docs'
@@ -54,7 +56,7 @@ jobs:
           make build_doc
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3.0.0
+        uses: actions/upload-artifact@v3.1.0
         with:
           name: site_artifact
           path: docs/site.tar.gz
@@ -77,7 +79,7 @@ jobs:
           mkdir ${{ env.DEST_DIRECTORY }}
 
       - name: Download Artifact
-        uses: actions/download-artifact@v3.0.0
+        uses: actions/download-artifact@v3
         with:
           name: site_artifact
           path: ${{ env.DEST_DIRECTORY }}
@@ -91,14 +93,13 @@ jobs:
       # https://github.com/peter-evans/create-pull-request
       - name: Create Pull Request
         id: create_pr
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v4.0.4
         with:
           title: "robot Update doc from ${{ needs.prepare_doc.outputs.ref }} to branch ${{ env.MERGE_BRANCH }} "
           commit-message: "robot Update chart from ${{ needs.prepare_doc.outputs.ref }} to branch ${{ env.MERGE_BRANCH }} "
           branch-suffix: timestamp
           branch: robot/update_doc
           delete-branch: true
-          # merge to
           base: ${{ env.MERGE_BRANCH }}
           signoff: true
           token: ${{ secrets.WELAN_PAT }}

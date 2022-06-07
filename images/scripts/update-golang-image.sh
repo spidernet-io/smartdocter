@@ -16,7 +16,7 @@ if [ "$#" -gt 1 ] ; then
   exit 1
 fi
 
-go_version=${GO_VERSION:-"1.17.8"}
+go_version=${GO_VERSION:-"1.18.2"}
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -39,5 +39,6 @@ used_by=($(git grep -l GOLANG_IMAGE= images/*/Dockerfile))
 
 for i in "${used_by[@]}" ; do
     # golang images with image digest
+    [ ! -f "${i}" ] && echo "error, failed to find ${i} " && exit 1
     sed "s|GOLANG_IMAGE=docker\.io/library/golang:[0-9][0-9]*\.[0-9][0-9]*\(\.[0-9][0-9]*\)\?@.*|GOLANG_IMAGE=${image}@${image_digest}|" "${i}" > "${i}.sedtmp" && mv "${i}.sedtmp" "${i}"
 done

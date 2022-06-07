@@ -32,6 +32,7 @@ on:
         required: true
         default: v1.0.0
 
+permissions: write-all
 
 jobs:
   get_ref:
@@ -85,48 +86,3 @@ jobs:
           path: output_charts/*
           retention-days: 1
           if-no-files-found: error
-
-  #  update /index.yaml in the target branch
-  #  update_githubpage:
-  #    runs-on: ubuntu-latest
-  #    needs: [package_chart, get_ref]
-  #    if: ${{ needs.get_ref.outputs.submit == 'true' }}
-  #    steps:
-  #      - name: Get Base Chart URL
-  #        id: get_base_url
-  #        run: |
-  #          name=${{ github.repository }}
-  #          proj=${name#*/}
-  #          url=https://${{ github.repository_owner }}.github.io/${proj}
-  #          echo "::set-output name=url::${url}"
-  #
-  #      - name: Checkout Code
-  #        uses: actions/checkout@v3
-  #        with:
-  #          ref: ${{ env.MERGE_BRANCH }}
-  #
-  #      - name: Download Artifact
-  #        uses: actions/download-artifact@v3.0.0
-  #        with:
-  #          name: chart_package_artifact
-  #          path: charts/
-  #
-  #      - name: Update Chart Yaml
-  #        run: |
-  #          helm repo index  ./charts  --url ${{ steps.get_base_url.outputs.url }}/charts
-  #          mv ./charts/index.yaml ./index.yaml
-  #
-  #      - name: Create Pull Request
-  #        id: create_pr
-  #        uses: peter-evans/create-pull-request@v4
-  #        with:
-  #          title: "robot Update chart from ${{ needs.get_ref.outputs.ref }} to branch ${{ env.MERGE_BRANCH }} "
-  #          commit-message: "robot Update chart from ${{ needs.get_ref.outputs.ref }} to branch ${{ env.MERGE_BRANCH }} "
-  #          branch-suffix: timestamp
-  #          branch: robot/update_chart
-  #          delete-branch: true
-  #          base: ${{ env.MERGE_BRANCH }}
-  #          signoff: true
-  #          token: ${{ secrets.GITHUB_TOKEN }}
-  #          labels: ${{ env.PR_LABEL }}
-  #          reviewers: ${{ env.PR_REVIWER }}

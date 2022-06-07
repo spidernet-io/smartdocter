@@ -37,6 +37,10 @@ GIT_COMMIT_TIME = $(shell git show -s --format='format:%aI')
 
 FULL_BUILD_VERSION = $(VERSION) $(GIT_COMMIT_VERSION)
 
+
+IMAGE_NAME_AGENT ?= ${REGISTER}/${GIT_REPO}/smartdocter-agent
+IMAGE_NAME_CONTROLLER ?= ${REGISTER}/${GIT_REPO}/smartdocter-controller
+
 #------------------
 
 # define a function replacing spaces with commas in a list
