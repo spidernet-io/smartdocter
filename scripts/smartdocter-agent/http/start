@@ -20,7 +20,7 @@ ip a
 mkdir -p ${SIT_DIR}
 if [ ! -f "${SIT_DIR}/index.html" ] ; then
     echo "generate index.html "
-    echo "this is netknife, ipv4=$MAIN_V4_IP, ipv6=$MAIN_V6_IP" > ${SIT_DIR}/index.html
+    echo "this is smartdocter-agent, ipv4=$MAIN_V4_IP, ipv6=$MAIN_V6_IP" > ${SIT_DIR}/index.html
 fi
 
 # listen on 0.0.0.0 and ::

@@ -16,15 +16,15 @@ echo "begin to build bin for $(CMD_BIN_DIR)" ; mkdir -p $(DESTDIR_BIN) ; \
   	 done
 endef
 
-.PHONY: build-netknife-bin
-build-netknife-bin: CMD_BIN_DIR:=netknifeCmd
-build-netknife-bin:
+.PHONY: build_smartdocter_agent_bin
+build_smartdocter_agent_bin: CMD_BIN_DIR:=smartdocter-agent-cmd
+build_smartdocter_agent_bin:
 	@ $(BUILD_BIN)
 
 
-.PHONY: build-smartdocker-bin
-build-smartdocker-bin: CMD_BIN_DIR:=smartdocterCmd
-build-smartdocker-bin:
+.PHONY: build_smartdocter_controller_bin
+build_smartdocter_controller_bin: CMD_BIN_DIR:=smartdocter-controller-cmd
+build_smartdocter_controller_bin:
 	@ $(BUILD_BIN)
 
 
@@ -32,36 +32,40 @@ build-smartdocker-bin:
 
 
 define BUILD_FINAL_IMAGE
-echo "Build Image with tag: $(GIT_COMMIT_VERSION)" ; \
+echo "Build Image with tag: $(IMAGE_TAG)" ; \
 		docker buildx build  \
 				--build-arg GIT_COMMIT_VERSION=$(GIT_COMMIT_VERSION) \
 				--build-arg GIT_COMMIT_TIME=$(GIT_COMMIT_TIME) \
 				--build-arg VERSION=$(GIT_COMMIT_VERSION) \
-				--file $(ROOT_DIR)/images/"$${FINAL_IMAGES##*/}"/Dockerfile \
+				--file $(IMAGEDIR)/Dockerfile \
 				--output type=docker \
-				--tag $${FINAL_IMAGES}:$(GIT_COMMIT_VERSION) . ; \
-		echo "build success for $${i}:$(GIT_COMMIT_VERSION) "
+				--tag ${FINAL_IMAGES}:$(IMAGE_TAG) . ; \
+		echo "build success for $${i}:$(IMAGE_TAG) "
 endef
 
 
 .PHONY: build_local_image
-build_local_image: build_local_netknife_image build_local_smartdocter_image
+build_local_image: build_local_smartdocter_agent_image build_local_smartdocter_controller_image
 
-.PHONY: build_local_netknife_image
-build_local_netknife_image: FINAL_IMAGES := ${REGISTER}/${GIT_REPO}/netknife
-build_local_netknife_image:
+.PHONY: build_local_smartdocter_agent_image
+build_local_smartdocter_agent_image: FINAL_IMAGES := $(IMAGE_NAME_AGENT)
+build_local_smartdocter_agent_image: IMAGEDIR := $(ROOT_DIR)/images/smartdocter-agent
+build_local_smartdocter_agent_image: IMAGE_TAG := $(GIT_COMMIT_VERSION)
+build_local_smartdocter_agent_image:
 	@ $(BUILD_FINAL_IMAGE)
 
-.PHONY: build_local_smartdocter_image
-build_local_smartdocter_image: FINAL_IMAGES := ${REGISTER}/${GIT_REPO}/smartdocter
-build_local_smartdocter_image:
+.PHONY: build_local_smartdocter_controller_image
+build_local_smartdocter_controller_image: FINAL_IMAGES := $(IMAGE_NAME_CONTROLLER)
+build_local_smartdocter_controller_image: IMAGEDIR := $(ROOT_DIR)/images/smartdocter-controller
+build_local_smartdocter_controller_image: IMAGE_TAG := $(GIT_COMMIT_VERSION)
+build_local_smartdocter_controller_image:
 	@ $(BUILD_FINAL_IMAGE)
 
 
 #---------
 
 .PHONY: build_local_base_image
-build_local_base_image: build_local_netknife_base_image
+build_local_base_image: build_local_smartdocter_agent_base_image build_local_smartdocter_controller_base_image
 
 
 define BUILD_BASE_IMAGE
@@ -76,17 +80,17 @@ TAG=` git ls-tree --full-tree HEAD -- $(IMAGEDIR) | awk '{ print $$3 }' ` ; \
 		echo "build success $(BASE_IMAGES):$${TAG} "
 endef
 
-.PHONY: build_local_netknife_base_image
-build_local_netknife_base_image: IMAGEDIR := ./images/netknife-base
-build_local_netknife_base_image: BASE_IMAGES := ${REGISTER}/${GIT_REPO}/netknife-base
-build_local_netknife_base_image:
+.PHONY: build_local_smartdocter_agent_base_image
+build_local_smartdocter_agent_base_image: IMAGEDIR := ./images/smartdocter-agent-base
+build_local_smartdocter_agent_base_image: BASE_IMAGES := ${REGISTER}/${GIT_REPO}/smartdocter-agent-base
+build_local_smartdocter_agent_base_image:
 	@ $(BUILD_BASE_IMAGE)
 
 
-.PHONY: build_local_smartdocter_base_image
-build_local_smartdocter_base_image: IMAGEDIR := ./images/smartdocter-base
-build_local_smartdocter_base_image: BASE_IMAGES := ${REGISTER}/${GIT_REPO}/smartdocter-base
-build_local_smartdocter_base_image:
+.PHONY: build_local_smartdocter_controller_base_image
+build_local_smartdocter_controller_base_image: IMAGEDIR := ./images/smartdocter-controller-base
+build_local_smartdocter_controller_base_image: BASE_IMAGES := ${REGISTER}/${GIT_REPO}/smartdocter-controller-base
+build_local_smartdocter_controller_base_image:
 	@ $(BUILD_BASE_IMAGE)
 
 
@@ -97,7 +101,7 @@ package-charts:
 	@ make -C charts package
 
 .PHONY: lint-golang
-lint-golang: LINT_DIR := ./netknifeCmd/... ./smartdocterCmd/...
+lint-golang: LINT_DIR := ./smartdocter-agent-cmd/... ./smartdocter-controller-cmd/...
 lint-golang:
 	$(QUIET) tools/check-go-fmt.sh
 	$(QUIET) $(GO_VET)  $(LINT_DIR)
@@ -127,6 +131,7 @@ lint-yaml:
 		--entrypoint sh -v $(ROOT_DIR):/data cytopia/yamllint \
 		-c '/usr/bin/yamllint -c /data/.github/yamllint-conf.yml /data' ; \
 		if (($$?==0)) ; then echo "congratulations ,all pass" ; else echo "error, pealse refer <https://yamllint.readthedocs.io/en/stable/rules.html> " ; fi
+
 
 .PHONY: lint-markdown-spell
 lint-markdown-spell:
@@ -175,7 +180,7 @@ fix-code-spell:
 
 
 .PHONY: unitest-tests
-unitest-tests: UNITEST_DIR := netknifeCmd smartdocterCmd
+unitest-tests: UNITEST_DIR := smartdocter-agent-cmd smartdocter-controller-cmd
 unitest-tests:
 	@echo "run unitest-tests"
 	$(QUIET) $(ROOT_DIR)/tools/ginkgo.sh   \
@@ -234,3 +239,32 @@ build_doc:
         squidfunk/mkdocs-material -c "cd /host ; cp ./docs/mkdocs.yml ./ ; mkdocs build ; cd site ; tar -czvf site.tar.gz * ; mv ${OUTPUT_TAR} ../docs/"
 	@ [ -f "$(PROJECT_DOC_DIR)/$(OUTPUT_TAR)" ] || { echo "failed to build site to $(PROJECT_DOC_DIR)/$(OUTPUT_TAR) " ; exit 1 ; }
 	@ echo "succeeded to build site to $(PROJECT_DOC_DIR)/$(OUTPUT_TAR) "
+
+
+
+.PHONY: update-go-version
+update-go-version: ## Update Go version for all the components
+	@echo "GO_MAJOR_AND_MINOR_VERSION=${GO_MAJOR_AND_MINOR_VERSION}"
+	@echo "GO_IMAGE_VERSION=${GO_IMAGE_VERSION}"
+	# ===== Update Go version for GitHub workflow
+	$(QUIET) for fl in $(shell find .github/workflows -name "*.yaml" -print) ; do \
+  			sed -i 's/go-version: .*/go-version: ${GO_IMAGE_VERSION}/g' $$fl ; \
+  			done
+	@echo "Updated go version in GitHub Actions to $(GO_IMAGE_VERSION)"
+	# ======= Update Go version in main.go.
+	$(QUIET) for fl in $(shell find .  -name main.go -not -path "./vendor/*" -print); do \
+		sed -i \
+			-e 's|^//go:build go.*|//go:build go${GO_MAJOR_AND_MINOR_VERSION}|g' \
+			-e 's|^// +build go.*|// +build go${GO_MAJOR_AND_MINOR_VERSION}|g' \
+			$$fl ; \
+	done
+	# ====== Update Go version in go.mod
+	$(QUIET) sed -i -E 's/^go .*/go '$(GO_MAJOR_AND_MINOR_VERSION)'/g' go.mod
+	@echo "Updated go version in go.mod to $(GO_VERSION)"
+ifeq (${shell [ -d ./test ] && echo done},done)
+	# ======= Update Go version in test scripts.
+	@echo "Updated go version in test scripts to $(GO_VERSION)"
+endif
+	# ===== Update Go version in Dockerfiles.
+	$(QUIET) $(MAKE) -C images update-golang-image
+	@echo "Updated go version in image Dockerfiles to $(GO_IMAGE_VERSION)"

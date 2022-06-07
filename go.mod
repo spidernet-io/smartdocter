@@ -1,6 +1,6 @@
 module smartdocter
 
-go 1.17
+go 1.18
 
 require (
 	fortio.org/fortio v1.28.0

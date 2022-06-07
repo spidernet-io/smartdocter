@@ -17,4 +17,3 @@ IMAGE_REGISTRIES ?=
 .PHONY: update-golang-image
 update-golang-image:
 	GO_VERSION=$(GO_VERSION) scripts/update-golang-image.sh
-

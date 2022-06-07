@@ -1,9 +1,8 @@
 # Copyright 2022 Authors of spidernet-io
 # SPDX-License-Identifier: Apache-2.0
 
-
-ARG BASE_IMAGE=ghcr.io/spidernet-io/smartdocter/netknife-base:cd902be37fb5fe6d57c19af8c6be78295e794eb0@sha256:66d93e37f36d20c15b97f580e46630f25d2217d485dee73fce9df55d53cab551
-ARG GOLANG_IMAGE=docker.io/library/golang:1.17.8@sha256:f675106e44f205a7284e15cd75c41b241329f3c03ac30b0ba07b14a6ea7c99d9
+ARG BASE_IMAGE=ghcr.io/spidernet-io/smartdocter/smartdocter-agent-base:46c48efe2e39cff5d8e8c008da896851dc3e954b@sha256:920b10a264460503e2c9d0ccf174ec10bf0aee54d40f7d1dba1afbd09c468135
+ARG GOLANG_IMAGE=docker.io/library/golang:1.18.2@sha256:04fab5aaf4fc18c40379924674491d988af3d9e97487472e674d0b5fd837dfac
 
 # TARGETARCH is an automatic platform ARG enabled by Docker BuildKit.
 # like amd64 arm64
@@ -24,7 +23,7 @@ WORKDIR /src
 RUN  make GOARCH=${TARGETARCH}   \
         RACE=${RACE} NOSTRIP=${NOSTRIP} NOOPT=${NOOPT} QUIET_MAKE=${QUIET_MAKE} \
         DESTDIR_BIN=/tmp/install/${TARGETOS}/${TARGETARCH}/bin \
-        build-netknife-bin
+        build_smartdocter_agent_bin
 
 RUN chmod -R +x /src/scripts/*
 
@@ -48,6 +47,6 @@ ARG VERSION
 ENV VERSION=${VERSION}
 
 COPY --from=builder /tmp/install/${TARGETOS}/${TARGETARCH}/bin/*   /usr/bin/
-COPY --from=builder /src/scripts/netknife   /scripts
+COPY --from=builder /src/scripts/smartdocter-agent   /scripts
 
 CMD ["/scripts/http/start"]

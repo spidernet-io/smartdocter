@@ -15,7 +15,7 @@ on:
       - reopened
     paths:
       # can not use env here
-      - images/netknife-base/**
+      - images/smartdocter-agent-base/**
   workflow_dispatch:
     inputs:
       ref:
@@ -38,12 +38,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: netknife-base
-            dockerfile: ./images/netknife-base/Dockerfile
-            context: ./images/netknife-base
-          - name: smartdocter-base
-            dockerfile: ./images/smartdocter-base/Dockerfile
-            context: ./images/smartdocter-base
+          - name: smartdocter-agent-base
+            dockerfile: ./images/smartdocter-agent-base/Dockerfile
+            context: ./images/smartdocter-agent-base
+          - name: smartdocter-controller-base
+            dockerfile: ./images/smartdocter-controller-base/Dockerfile
+            context: ./images/smartdocter-controller-base
 
     steps:
       - name: Set up Docker Buildx
