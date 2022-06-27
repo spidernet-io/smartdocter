@@ -7,7 +7,7 @@ require (
 	github.com/ishidawataru/sctp v0.0.0-20210707070123-9a39160e9062
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
-	github.com/spf13/cobra v1.3.0
+	github.com/spf13/cobra v1.5.0
 	github.com/wcharczuk/go-chart v2.0.1+incompatible
 	google.golang.org/grpc v1.44.0
 	k8s.io/apimachinery v0.23.6
