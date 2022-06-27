@@ -53,7 +53,8 @@ var (
 
 // SetFlagDefaultsForClientTools changes the default value of -logprefix and -logcaller
 // to make output without caller and prefix, a default more suitable for command line tools (like dnsping).
-// Needs to be called before flag.Parse().
+// Needs to be called before flag.Parse(). Caller could also use log.Printf instead of changing this
+// if not wanting to use levels.
 func SetFlagDefaultsForClientTools() {
 	lcf := flag.Lookup("logcaller")
 	lcf.DefValue = "false"
@@ -83,12 +84,18 @@ func init() {
 	}
 	// virtual dynLevel flag that maps back to actual level
 	_ = dflag.DynString(flag.CommandLine, "loglevel", GetLogLevel().String(),
-		fmt.Sprintf("loglevel, one of %v", levelToStrA)).WithValidator(func(newStr string) error {
-		_, err := ValidateLevel(newStr)
-		return err
-	}).WithSyncNotifier(func(old, newStr string) {
-		_ = setLogLevelStr(newStr) // will succeed as we just validated it first
-	})
+		fmt.Sprintf("loglevel, one of %v", levelToStrA)).WithInputMutator(
+		func(inp string) string {
+			// The validation map has full lowercase and capitalized first letter version
+			return strings.ToLower(strings.TrimSpace(inp))
+		}).WithValidator(
+		func(newStr string) error {
+			_, err := ValidateLevel(newStr)
+			return err
+		}).WithSyncNotifier(
+		func(old, newStr string) {
+			_ = setLogLevelStr(newStr) // will succeed as we just validated it first
+		})
 	log.SetFlags(log.Ltime)
 }
 
@@ -105,7 +112,7 @@ func (l Level) String() string {
 func ValidateLevel(str string) (Level, error) {
 	var lvl Level
 	var ok bool
-	if lvl, ok = levelToStrM[strings.TrimSpace(str)]; !ok {
+	if lvl, ok = levelToStrM[str]; !ok {
 		return -1, fmt.Errorf("should be one of %v", levelToStrA)
 	}
 	return lvl, nil
@@ -189,6 +196,11 @@ func logPrintf(lvl Level, format string, rest ...interface{}) {
 	if lvl == Fatal {
 		panic("aborting...")
 	}
+}
+
+// Printf forwards to the underlying go logger to print (with only timestamp prefixing).
+func Printf(format string, rest ...interface{}) {
+	log.Printf(format, rest...)
 }
 
 // SetOutput sets the output to a different writer (forwards to system logger).
