@@ -46,8 +46,15 @@ packages=(
   netperf
   dnsutils
   dnsperf
+  nftables
+  tcptraceroute
+  tshark
+  openssl
+  wget
 )
 
+TARGETARCH="$1"
+echo "TARGETARCH=$TARGETARCH"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -57,6 +64,14 @@ apt-get purge --auto-remove
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
+
+WEBSOCAT_VERSION=v1.10.0
+if [ "$TARGETARCH"x == "arm64"x ] ; then
+    wget --no-check-certificate https://github.com/vi/websocat/releases/download/${WEBSOCAT_VERSION}/websocat.aarch64-unknown-linux-musl -O /usr/sbin/websocat
+else
+    wget --no-check-certificate https://github.com/vi/websocat/releases/download/${WEBSOCAT_VERSION}/websocat.x86_64-unknown-linux-musl -O /usr/sbin/websocat
+fi
+chmod +x /usr/sbin/websocat
 
 
 #========= verify
@@ -97,6 +112,7 @@ stress-ng -V
 lspci --version
 iperf3 -v
 netperf -V
+which tcptraceroute
 
 #
 #echo 'ENABLED="true"' > /etc/default/sysstat

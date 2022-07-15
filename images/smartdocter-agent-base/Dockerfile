@@ -35,6 +35,7 @@ FROM ${FORTIO_IMAGE} as fortio
 
 #========== root image ==============
 FROM ${UBUNTU_IMAGE} as rootfs
+ARG TARGETARCH
 COPY /install-others.sh /install-others.sh
 COPY /configure-iptables-wrapper.sh /configure-iptables-wrapper.sh
 COPY /iptables-wrapper /usr/sbin/iptables-wrapper
@@ -52,7 +53,7 @@ COPY --from=gops-cni-builder /out/${TARGETPLATFORM}/bin/gops /bin/gops
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=fortio /usr/bin/fortio /usr/bin/fortio
 
-RUN chmod +x /install-others.sh && /install-others.sh && rm -f /install-others.sh
+RUN chmod +x /install-others.sh && /install-others.sh ${TARGETARCH} && rm -f /install-others.sh
 
 
 #============

@@ -263,10 +263,12 @@ func startServer(server *http.Server, exitCh chan shutdownRequest, fn func() err
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("GET /")
+	printRequest(r)
 	fmt.Fprintf(w, "NOW: %v", time.Now())
 }
 
 func echoHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	msg := r.FormValue("msg")
 	codeString := r.FormValue("code")
 	log.Printf("GET /echo?msg=%s&code=%s", msg, codeString)
@@ -283,9 +285,11 @@ func echoHandler(w http.ResponseWriter, r *http.Request) {
 
 func clientIPHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("GET /clientip")
+	printRequest(r)
 	fmt.Fprintf(w, r.RemoteAddr)
 }
 func headerHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	key := r.FormValue("key")
 	if key != "" {
 		log.Printf("GET /header?key=%s", key)
@@ -299,6 +303,10 @@ func headerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, "%s", string(data))
 	}
+}
+
+func printRequest(r *http.Request) {
+	fmt.Printf("request(%s): %+v \n", r.RemoteAddr, r)
 }
 
 type shutdownRequest struct {
@@ -335,6 +343,7 @@ func exitHandler(w http.ResponseWriter, r *http.Request, exitCh chan<- shutdownR
 }
 
 func hostnameHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	log.Printf("GET /hostname")
 	fmt.Fprint(w, getHostName())
 }
@@ -356,6 +365,7 @@ func shutdownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func dialHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	values, err := url.Parse(r.URL.RequestURI())
 	if err != nil {
 		http.Error(w, fmt.Sprintf("%v", err), http.StatusBadRequest)
@@ -501,6 +511,7 @@ func dialSCTP(request string, addr net.Addr) (string, error) {
 }
 
 func shellHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	cmd := r.FormValue("shellCommand")
 	if cmd == "" {
 		cmd = r.FormValue("cmd")
@@ -589,11 +600,13 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func hostNameHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	log.Printf("GET /hostName")
 	fmt.Fprint(w, getHostName())
 }
 
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
+	printRequest(r)
 	location := r.FormValue("location")
 	codeString := r.FormValue("code")
 	log.Printf("%s /redirect?msg=%s&code=%s", r.Method, location, codeString)

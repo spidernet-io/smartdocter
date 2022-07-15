@@ -39,8 +39,8 @@ var CmdServeHostname = &cobra.Command{
 	Use:   "serve-hostname",
 	Short: "Serves the hostname",
 	Long:  `Serves the hostname through HTTP / TCP / UDP on the given port.`,
-	Args:  cobra.MaximumNArgs(0),
-	Run:   rootmain,
+	// Args:  cobra.MaximumNArgs(0),
+	Run: rootmain,
 }
 
 var (
@@ -81,7 +81,8 @@ func rootmain(cmd *cobra.Command, args []string) {
 					log.Fatalf("Error from Accept(): %s", err)
 				}
 				log.Printf("TCP request from %s", conn.RemoteAddr().String())
-				_, e := conn.Write([]byte(hostname))
+				res := "server: " + hostname + ", client: " + conn.RemoteAddr().String()
+				_, e := conn.Write([]byte(res))
 				if e != nil {
 					log.Fatalf("Error from Write(): %s", e)
 				}
@@ -105,8 +106,9 @@ func rootmain(cmd *cobra.Command, args []string) {
 				if err != nil {
 					log.Fatalf("Error from ReadFrom(): %s", err)
 				}
+				res := "server: " + hostname + ", client: " + cliAddr.String()
 				log.Printf("UDP request from %s", cliAddr.String())
-				_, e := sock.WriteTo([]byte(hostname), cliAddr)
+				_, e := sock.WriteTo([]byte(res), cliAddr)
 				if e != nil {
 					log.Fatalf("Error from Write(): %s", e)
 				}
@@ -116,13 +118,14 @@ func rootmain(cmd *cobra.Command, args []string) {
 	if doHTTP {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			log.Printf("HTTP request from %s", r.RemoteAddr)
+			log.Printf("HTTP request: %+v \n", r)
 
 			if doClose {
 				// Add this header to force to close the connection after serving the request.
 				w.Header().Add("Connection", "close")
 			}
-
-			fmt.Fprintf(w, "%s", hostname)
+			res := "server: " + hostname + ", client: " + r.RemoteAddr
+			fmt.Fprintf(w, "%s", res)
 		})
 		go func() {
 			// Run in a closure so http.ListenAndServe doesn't block

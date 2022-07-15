@@ -49,4 +49,4 @@ ENV VERSION=${VERSION}
 COPY --from=builder /tmp/install/${TARGETOS}/${TARGETARCH}/bin/*   /usr/bin/
 COPY --from=builder /src/scripts/smartdocter-agent   /scripts
 
-CMD ["/scripts/http/start"]
+CMD ["/usr/bin/serve-hostname"]

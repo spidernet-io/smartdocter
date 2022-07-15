@@ -15,5 +15,15 @@ Keep in mind that `--http` cannot be given at the same time as `--tcp` or `--udp
 Usage:
 
 ```console
-    kubectl exec test-agnhost -- /agnhost serve-hostname [--tcp] [--udp] [--http] [--close] [--port <port>]
+    serve-hostname [--tcp] [--udp] [--http] [--close] [--port <port>]
+    
+    #serve http , use curl to test
+    serve-hostname
+    
+    #serve http, use nc to test
+    serve-hostname --tcp=true --http=false
+    
+    #serve http, use nc to test
+    serve-hostname --udp=true --http=false
+    
 ```
