@@ -1,0 +1,104 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+
+OUTPUT_DIR="$1"
+[ -z "$OUTPUT_DIR" ] && echo "error, miss OUTPUT_DIR" >&2 && exit 1
+
+# optional, ALL_ALT_NAME could be empty
+# ALL_ALT_NAME="myservice  myservice.default  myservice.default.svc myservice.default.svc.cluster.local "
+# script auto register all local IP
+ALL_ALT_NAME=${2:-""}
+
+
+CN_NAME=${CN_NAME:-"myAhur"}
+# true or false
+AUTO_REGISTER_ALL_LOCAL_IP=${AUTO_REGISTER_ALL_LOCAL_IP:-"true"}
+
+#========================
+
+if [ ! -d "$OUTPUT_DIR" ] ;then
+  mkdir -p ${OUTPUT_DIR}
+fi
+cd ${OUTPUT_DIR}
+rm -f ca.crt  ca.key  server.conf  server.key server.conf
+
+#-------------
+
+CheckIPv6Addr(){
+    ip="$1"
+    [ -z "$ip" ] && return 1
+
+    IPV6_PATTEN="(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))"
+
+    grep -E  "^$IPV6_PATTEN$" <<< "$ip" &> /dev/null  && return 0
+    return 2
+}
+
+ALT_DATA=""
+generateAltName() {
+    ALL_LIST=" $ALL_ALT_NAME "
+    if [ "$AUTO_REGISTER_ALL_LOCAL_IP"x == "true"x ] ; then
+        ALL_IPV4=` ip -4 addr | grep -oP '(?<=inet\s)[0-9]+(\.[0-9]+){3}' | sort | uniq	 | tr '\n' ' ' `
+        ALL_IPV6=` ip -6 addr | grep -oP '(?<=inet6\s)[0-9a-f:]+' | sort  | uniq	| tr '\n' ' ' `
+        ALL_LIST+=" $ALL_IPV4 $ALL_IPV6  "
+    fi
+    ALL_LIST=` echo "$ALL_LIST" |  tr -s ' ' | tr ' ' '\n' | sort  | uniq `
+
+    DNS_COUNTER=1
+    IP_COUNTER=1
+    for ITEM in $ALL_LIST ; do
+        if egrep "^[0-9]+(\.[0-9]+){3}$" <<< "$ITEM" &>/dev/null ||  CheckIPv6Addr "$ITEM" ; then
+          ALT_DATA+="IP.${IP_COUNTER} = ${ITEM}
+"
+          ((IP_COUNTER++))
+        else
+          ALT_DATA+="DNS.${DNS_COUNTER} = ${ITEM}
+"
+          ((DNS_COUNTER++))
+        fi
+    done
+
+    echo "generate cert for:"
+    echo "$ALT_DATA"
+}
+generateAltName
+
+#-------------
+
+# CA cert
+openssl req -nodes -new -x509 -keyout ca.key -out ca.crt -subj "/CN=${CN_NAME}" -days 3650
+
+
+cat >server.conf <<EOF
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+prompt = no
+
+[req_distinguished_name]
+CN = ${CN_NAME}
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth, serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+${ALT_DATA}
+EOF
+
+#server key
+openssl genrsa -out server.key 2048
+
+# Generate a Certificate Signing Request (CSR) for the private key, and sign it with the private key of the CA.
+openssl req -new -key server.key -config server.conf \
+    | openssl x509 -req -CA ca.crt -CAkey ca.key -extensions v3_req -extfile server.conf -days 3650 -CAcreateserial -out server.crt
+
+rm -f ca.srl
+
+echo "succeed to generate certificate for ${CN_NAME} to directory $OUTPUT_DIR "
