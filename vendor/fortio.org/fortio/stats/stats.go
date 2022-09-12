@@ -214,7 +214,8 @@ func NewHistogram(offset float64, divider float64) *Histogram {
 
 // Val2Bucket values are kept in two different structure
 // val2Bucket allows you reach between 0 and 1000 in constant time.
-// nolint: gochecknoinits // we need to init these.
+//
+//nolint:gochecknoinits // we need to init these.
 func init() {
 	val2Bucket = make([]int, maxArrayValue)
 	maxArrayValueIndex = -1
@@ -516,6 +517,9 @@ func ParsePercentiles(percentiles string) ([]float64, error) {
 		if err != nil {
 			return res, err
 		}
+		if p <= 0 || p >= 100 {
+			return res, fmt.Errorf("percentile %g must be > 0 and < 100", p)
+		}
 		res = append(res, p)
 	}
 	if len(res) == 0 {
@@ -535,4 +539,46 @@ func RoundToDigits(v float64, digits int) float64 {
 // Round rounds to 4 digits after the decimal point.
 func Round(v float64) float64 {
 	return RoundToDigits(v, 4)
+}
+
+// Occurrence is a type that stores the occurrence of the key.
+type Occurrence struct {
+	ipUsage map[string]int
+}
+
+// NewOccurrence create a new occurrence map.
+func NewOccurrence() *Occurrence {
+	o := new(Occurrence)
+	o.ipUsage = make(map[string]int)
+
+	return o
+}
+
+// Record records a key value pair.
+func (m *Occurrence) Record(key string) {
+	m.ipUsage[key]++
+}
+
+// PrintAndAggregate print the ip usage and aggregate to the total count map.
+func (m *Occurrence) PrintAndAggregate(ipCountMap map[string]int) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+
+	size := len(m.ipUsage)
+	count := 0
+
+	for k, v := range m.ipUsage {
+		ipCountMap[k] += v
+		sb.WriteString(k)
+		if size == 1 {
+			break
+		}
+		sb.WriteString(fmt.Sprintf(" (%d)", v))
+		count++
+		if count != size {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString("]")
+	return sb.String()
 }
