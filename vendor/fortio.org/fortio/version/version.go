@@ -16,11 +16,10 @@
 package version // import "fortio.org/fortio/version"
 import (
 	"fmt"
+	"log"
 	"runtime"
 	"runtime/debug"
 	"strings"
-
-	"fortio.org/fortio/log"
 )
 
 var (
@@ -87,7 +86,7 @@ func FromBuildInfoPath(path string) (short, long, full string) {
 	binfo, ok := debug.ReadBuildInfo()
 	if !ok {
 		full = "fortio version module error, no build info"
-		log.Errf(full)
+		log.Print("Error calling debug.ReadBuildInfo() for fortio version module")
 		return
 	}
 	short, sum := getVersion(binfo, path)
@@ -98,6 +97,6 @@ func FromBuildInfoPath(path string) (short, long, full string) {
 
 // This "burns in" the fortio version. we need to get the "right" versions though.
 // depending if we are a module or main.
-func init() { // nolint:gochecknoinits //we do need an init for this
+func init() { //nolint:gochecknoinits // we do need an init for this
 	version, longVersion, fullVersion = FromBuildInfoPath("fortio.org/fortio")
 }
