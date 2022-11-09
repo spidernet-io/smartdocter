@@ -23,6 +23,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"log"
 	"net"
 	"net/http"
@@ -30,8 +31,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/spf13/cobra"
 )
 
 // CmdServeHostname is used by agnhost Cobra.
@@ -56,7 +55,7 @@ func init() {
 	CmdServeHostname.Flags().BoolVar(&doUDP, "udp", false, "Serve raw over UDP.")
 	CmdServeHostname.Flags().BoolVar(&doHTTP, "http", true, "Serve HTTP.")
 	CmdServeHostname.Flags().BoolVar(&doClose, "close", false, "Close connection per each HTTP request.")
-	CmdServeHostname.Flags().IntVar(&port, "port", 9376, "Port number.")
+	CmdServeHostname.Flags().IntVar(&port, "port", 80, "Port number.")
 }
 
 func rootmain(cmd *cobra.Command, args []string) {
@@ -124,8 +123,24 @@ func rootmain(cmd *cobra.Command, args []string) {
 				// Add this header to force to close the connection after serving the request.
 				w.Header().Add("Connection", "close")
 			}
-			res := "server: " + hostname + ", client: " + r.RemoteAddr
-			fmt.Fprintf(w, "%s", res)
+			message := "{ \n"
+			message += fmt.Sprintf("  \"server\": \"%s\"\n", hostname)
+			message += fmt.Sprintf("  \"clientIp\": \"%s\"\n", r.RemoteAddr)
+			message += "}"
+			fmt.Fprintf(w, "%s", message)
+
+			message = "\n"
+			message += "{ \n"
+			message += fmt.Sprintf("  \"request method\": \"%s\"\n", r.Method)
+			message += fmt.Sprintf("  \"request url\": \"%s\"\n", r.RequestURI)
+			message += "  \"request header\": {\n"
+			for k, v := range r.Header {
+				message += fmt.Sprintf("      \"%s\": \"%s\"\n", k, v)
+			}
+			message += "  }\n"
+			message += "}"
+			fmt.Fprintf(w, "%s", message)
+
 		})
 		go func() {
 			// Run in a closure so http.ListenAndServe doesn't block
