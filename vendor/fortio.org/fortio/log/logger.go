@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -49,22 +50,35 @@ var (
 	// LogFileAndLine determines if the log lines will contain caller file name and line number.
 	LogFileAndLine = flag.Bool("logcaller", true, "Logs filename and line number of callers to log")
 	levelInternal  int32
+	fatalPanics    = flag.Bool("logfatalpanics", true, "If true, log.Fatal will panic (stack trace) instead of just exit 1")
 )
+
+// ChangeFlagsDefault sets some flags to a different default.
+func ChangeFlagsDefault(newDefault string, flagNames ...string) {
+	for _, flagName := range flagNames {
+		f := flag.Lookup(flagName)
+		if f == nil {
+			Fatalf("flag %s not found", flagName)
+			continue // not reached but linter doesn't know Fatalf panics/exits
+		}
+		f.DefValue = newDefault
+		err := f.Value.Set(newDefault)
+		if err != nil {
+			Fatalf("error setting flag %s: %v", flagName, err)
+		}
+	}
+}
 
 // SetFlagDefaultsForClientTools changes the default value of -logprefix and -logcaller
 // to make output without caller and prefix, a default more suitable for command line tools (like dnsping).
 // Needs to be called before flag.Parse(). Caller could also use log.Printf instead of changing this
-// if not wanting to use levels.
+// if not wanting to use levels. Also makes log.Fatalf just exit instead of panic.
 func SetFlagDefaultsForClientTools() {
-	lcf := flag.Lookup("logcaller")
-	lcf.DefValue = "false"
-	_ = lcf.Value.Set("false")
-	lpf := flag.Lookup("logprefix")
-	lpf.DefValue = ""
-	_ = lpf.Value.Set("")
+	ChangeFlagsDefault("", "logprefix")
+	ChangeFlagsDefault("false", "logcaller", "logfatalpanics")
 }
 
-// nolint: gochecknoinits // needed
+//nolint:gochecknoinits // needed
 func init() {
 	setLevel(Info) // starting value
 	levelToStrA = []string{
@@ -194,7 +208,10 @@ func logPrintf(lvl Level, format string, rest ...interface{}) {
 		log.Print(levelToStrA[lvl][0:1], " ", *LogPrefix, fmt.Sprintf(format, rest...))
 	}
 	if lvl == Fatal {
-		panic("aborting...")
+		if *fatalPanics {
+			panic("aborting...")
+		}
+		os.Exit(1)
 	}
 }
 
@@ -221,7 +238,7 @@ func Debugf(format string, rest ...interface{}) {
 }
 
 // LogVf logs if Verbose level is on.
-func LogVf(format string, rest ...interface{}) { //nolint: revive
+func LogVf(format string, rest ...interface{}) { //nolint:revive
 	logPrintf(Verbose, format, rest...)
 }
 
@@ -251,12 +268,12 @@ func Fatalf(format string, rest ...interface{}) {
 }
 
 // LogDebug shortcut for fortio.Log(fortio.Debug).
-func LogDebug() bool { //nolint: revive
+func LogDebug() bool { //nolint:revive
 	return Log(Debug)
 }
 
 // LogVerbose shortcut for fortio.Log(fortio.Verbose).
-func LogVerbose() bool { //nolint: revive
+func LogVerbose() bool { //nolint:revive
 	return Log(Verbose)
 }
 
