@@ -196,7 +196,7 @@ type HistogramData struct {
 	Avg         float64
 	StdDev      float64
 	Data        []Bucket
-	Percentiles []Percentile
+	Percentiles []Percentile `json:"Percentiles,omitempty"`
 }
 
 // NewHistogram creates a new histogram (sets up the buckets).
@@ -214,7 +214,8 @@ func NewHistogram(offset float64, divider float64) *Histogram {
 
 // Val2Bucket values are kept in two different structure
 // val2Bucket allows you reach between 0 and 1000 in constant time.
-// nolint: gochecknoinits // we need to init these.
+//
+//nolint:gochecknoinits // we need to init these.
 func init() {
 	val2Bucket = make([]int, maxArrayValue)
 	maxArrayValueIndex = -1
@@ -516,6 +517,9 @@ func ParsePercentiles(percentiles string) ([]float64, error) {
 		if err != nil {
 			return res, err
 		}
+		if p <= 0 || p >= 100 {
+			return res, fmt.Errorf("percentile %g must be > 0 and < 100", p)
+		}
 		res = append(res, p)
 	}
 	if len(res) == 0 {
@@ -535,4 +539,50 @@ func RoundToDigits(v float64, digits int) float64 {
 // Round rounds to 4 digits after the decimal point.
 func Round(v float64) float64 {
 	return RoundToDigits(v, 4)
+}
+
+// Occurrence is a type that stores the occurrences of the keys.
+// Could be directly an alias for map[string]int but keeping the
+// outer struct for parity with Counter and Histogram and to keep
+// 1.38's api.
+type Occurrence struct {
+	m map[string]int
+}
+
+// NewOccurrence create a new occurrence (map).
+func NewOccurrence() *Occurrence {
+	return &Occurrence{m: make(map[string]int)}
+}
+
+// Record records a new occurrence of the key.
+func (o *Occurrence) Record(key string) {
+	o.m[key]++
+}
+
+// AggregateAndToString aggregates the data from the object into the passed in totals map
+// and returns a string suitable for printing usage counts per key of the incoming object.
+func (o *Occurrence) AggregateAndToString(totals map[string]int) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+
+	first := true
+	onlyOne := (len(o.m) == 1)
+
+	for k, v := range o.m {
+		totals[k] += v
+		if onlyOne {
+			// Special case for single entry in the map, no [] form
+			// and the count is omitted (already printed in runner ip count case).
+			return k
+		}
+		if first {
+			first = false
+		} else {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(k)
+		sb.WriteString(fmt.Sprintf(" (%d)", v))
+	}
+	sb.WriteString("]")
+	return sb.String()
 }
