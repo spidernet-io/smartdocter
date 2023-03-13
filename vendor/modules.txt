@@ -1,10 +1,14 @@
-# fortio.org/fortio v1.34.1
+# fortio.org/fortio v1.53.1
 ## explicit; go 1.18
-fortio.org/fortio/dflag
-fortio.org/fortio/log
 fortio.org/fortio/periodic
 fortio.org/fortio/stats
 fortio.org/fortio/version
+# fortio.org/log v1.3.0
+## explicit; go 1.18
+fortio.org/log
+# fortio.org/version v1.0.2
+## explicit; go 1.18
+fortio.org/version
 # github.com/blend/go-sdk v1.20220411.3
 ## explicit; go 1.17
 # github.com/go-logr/logr v1.2.0
@@ -82,16 +86,13 @@ github.com/wcharczuk/go-chart/matrix
 github.com/wcharczuk/go-chart/roboto
 github.com/wcharczuk/go-chart/seq
 github.com/wcharczuk/go-chart/util
-# golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
-## explicit; go 1.18
-golang.org/x/exp/constraints
 # golang.org/x/image v0.0.0-20220413100746-70e8d0d3baa9
 ## explicit; go 1.12
 golang.org/x/image/draw
 golang.org/x/image/font
 golang.org/x/image/math/f64
 golang.org/x/image/math/fixed
-# golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e
+# golang.org/x/net v0.8.0
 ## explicit; go 1.17
 golang.org/x/net/html
 golang.org/x/net/html/atom
@@ -102,11 +103,10 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sys v0.0.0-20220627191245-f75cf1eec38b
+# golang.org/x/sys v0.6.0
 ## explicit; go 1.17
-golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
-# golang.org/x/text v0.3.7
+# golang.org/x/text v0.8.0
 ## explicit; go 1.17
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
@@ -128,15 +128,15 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# golang.org/x/tools v0.1.10
-## explicit; go 1.17
+# golang.org/x/tools v0.6.0
+## explicit; go 1.18
 golang.org/x/tools/go/ast/inspector
 golang.org/x/tools/internal/typeparams
-# google.golang.org/genproto v0.0.0-20220628213854-d9e0b6570c03
-## explicit; go 1.15
+# google.golang.org/genproto v0.0.0-20230223222841-637eb2293923
+## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.47.0
-## explicit; go 1.14
+# google.golang.org/grpc v1.53.0
+## explicit; go 1.17
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
@@ -186,7 +186,7 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/protobuf v1.28.0
+# google.golang.org/protobuf v1.28.1
 ## explicit; go 1.11
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
