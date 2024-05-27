@@ -1,4 +1,4 @@
-// Copyright 2017 Istio Authors
+// Copyright 2017 Fortio Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"fortio.org/fortio/log"
+	"fortio.org/log"
 )
 
 // Counter is a type whose instances record values
@@ -46,12 +46,13 @@ func (c *Counter) Record(v float64) {
 func (c *Counter) RecordN(v float64, n int) {
 	isFirst := (c.Count == 0)
 	c.Count += int64(n)
-	if isFirst {
+	switch {
+	case isFirst:
 		c.Min = v
 		c.Max = v
-	} else if v < c.Min {
+	case v < c.Min:
 		c.Min = v
-	} else if v > c.Max {
+	case v > c.Max:
 		c.Max = v
 	}
 	s := v * float64(n)
@@ -196,25 +197,27 @@ type HistogramData struct {
 	Avg         float64
 	StdDev      float64
 	Data        []Bucket
-	Percentiles []Percentile
+	Percentiles []Percentile `json:"Percentiles,omitempty"`
 }
 
 // NewHistogram creates a new histogram (sets up the buckets).
 // Divider value can not be zero, otherwise returns zero.
 func NewHistogram(offset float64, divider float64) *Histogram {
-	h := new(Histogram)
-	h.Offset = offset
 	if divider == 0 {
 		return nil
 	}
-	h.Divider = divider
-	h.Hdata = make([]int32, numBuckets)
-	return h
+	h := Histogram{
+		Offset:  offset,
+		Divider: divider,
+		Hdata:   make([]int32, numBuckets),
+	}
+	return &h
 }
 
 // Val2Bucket values are kept in two different structure
 // val2Bucket allows you reach between 0 and 1000 in constant time.
-// nolint: gochecknoinits // we need to init these.
+//
+//nolint:gochecknoinits // we need to init these.
 func init() {
 	val2Bucket = make([]int, maxArrayValue)
 	maxArrayValueIndex = -1
@@ -269,18 +272,26 @@ func (h *Histogram) RecordN(v float64, n int) {
 
 // Records v value to count times.
 func (h *Histogram) record(v float64, count int) {
-	// Scaled value to bucketize - we subtract epsilon because the interval
+	// Scaled value to bucketize - we used to subtract epsilon because the interval
 	// is open to the left ] start, end ] so when exactly on start it has
-	// to fall on the previous bucket. TODO add boundary tests
-	scaledVal := (v-h.Offset)/h.Divider - 0.0001
+	// to fall on the previous bucket: which is more correctly done using
+	// math.Ceil()-1 but that doesn't work... so back to epsilon distance check
+	scaledVal := (v - h.Offset) / h.Divider
 	var idx int
-	if scaledVal <= firstValue {
+	switch {
+	case scaledVal <= firstValue:
 		idx = 0
-	} else if scaledVal > lastValue {
+	case scaledVal > lastValue:
 		idx = numBuckets - 1 // last bucket is for > last value
-	} else {
-		// else we look it up
-		idx = lookUpIdx(int(scaledVal))
+	default:
+		// else we look it up (with the open interval adjustment)
+		svInt := int(scaledVal)
+		delta := scaledVal - float64(svInt)
+		if delta < 1e-12 {
+			svInt--
+		}
+		log.Debugf("v %f -> scaledVal %.17f ceil %f delta %g - svInt %d", v, scaledVal, math.Ceil(scaledVal), delta, svInt)
+		idx = lookUpIdx(svInt)
 	}
 	h.Hdata[idx] += int32(count)
 }
@@ -516,6 +527,9 @@ func ParsePercentiles(percentiles string) ([]float64, error) {
 		if err != nil {
 			return res, err
 		}
+		if p <= 0 || p >= 100 {
+			return res, fmt.Errorf("percentile %g must be > 0 and < 100", p)
+		}
 		res = append(res, p)
 	}
 	if len(res) == 0 {
@@ -535,4 +549,50 @@ func RoundToDigits(v float64, digits int) float64 {
 // Round rounds to 4 digits after the decimal point.
 func Round(v float64) float64 {
 	return RoundToDigits(v, 4)
+}
+
+// Occurrence is a type that stores the occurrences of the keys.
+// Could be directly an alias for map[string]int but keeping the
+// outer struct for parity with Counter and Histogram and to keep
+// 1.38's api.
+type Occurrence struct {
+	m map[string]int
+}
+
+// NewOccurrence create a new occurrence (map).
+func NewOccurrence() *Occurrence {
+	return &Occurrence{m: make(map[string]int)}
+}
+
+// Record records a new occurrence of the key.
+func (o *Occurrence) Record(key string) {
+	o.m[key]++
+}
+
+// AggregateAndToString aggregates the data from the object into the passed in totals map
+// and returns a string suitable for printing usage counts per key of the incoming object.
+func (o *Occurrence) AggregateAndToString(totals map[string]int) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+
+	first := true
+	onlyOne := (len(o.m) == 1)
+
+	for k, v := range o.m {
+		totals[k] += v
+		if onlyOne {
+			// Special case for single entry in the map, no [] form
+			// and the count is omitted (already printed in runner ip count case).
+			return k
+		}
+		if first {
+			first = false
+		} else {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(k)
+		sb.WriteString(fmt.Sprintf(" (%d)", v))
+	}
+	sb.WriteString("]")
+	return sb.String()
 }
