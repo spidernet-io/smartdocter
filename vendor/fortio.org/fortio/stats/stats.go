@@ -1,4 +1,4 @@
-// Copyright 2017 Istio Authors
+// Copyright 2017 Fortio Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ import (
 	"strconv"
 	"strings"
 
-	"fortio.org/fortio/log"
+	"fortio.org/log"
 )
 
 // Counter is a type whose instances record values
-// and calculate stats (count,average,min,max,stddev).
+// and calculate stats (count, average, min, max, and stddev).
 type Counter struct {
 	Count        int64
 	Min          float64
@@ -46,12 +46,13 @@ func (c *Counter) Record(v float64) {
 func (c *Counter) RecordN(v float64, n int) {
 	isFirst := (c.Count == 0)
 	c.Count += int64(n)
-	if isFirst {
+	switch {
+	case isFirst:
 		c.Min = v
 		c.Max = v
-	} else if v < c.Min {
+	case v < c.Min:
 		c.Min = v
-	} else if v > c.Max {
+	case v > c.Max:
 		c.Max = v
 	}
 	s := v * float64(n)
@@ -124,7 +125,7 @@ func (c *Counter) Transfer(src *Counter) {
 
 // Histogram - written in go with inspiration from https://github.com/facebook/wdt/blob/master/util/Stats.h
 
-// The intervals are ]prev,current] so for "90" (previous is 80) the values in that bucket are >80 and <=90
+// The intervals are [prev, current] so for "90" (previous is 80) the values in that bucket are >80 and <=90
 // that way a cumulative % up to that bucket means X% of the data <= 90 (or 100-X% > 90), works well for max too
 // There are 2 special buckets - the first one is from min to and including 0,
 // one after the last for value > last and up to max.
@@ -151,7 +152,7 @@ var (
 	maxArrayValueIndex = -1          // Index of maxArrayValue
 )
 
-// Histogram extends Counter and adds an histogram.
+// Histogram extends Counter and adds a histogram.
 // Must be created using NewHistogram or anotherHistogram.Clone()
 // and not directly.
 type Histogram struct {
@@ -166,7 +167,7 @@ type Histogram struct {
 
 // Interval is a range from start to end.
 // Interval are left closed, open right expect the last one which includes Max.
-// ie [Start, End[ with the next one being [PrevEnd, NextEnd[.
+// i.e., [Start, End] with the next one being [PrevEnd, NextEnd].
 type Interval struct {
 	Start float64
 	End   float64
@@ -196,25 +197,27 @@ type HistogramData struct {
 	Avg         float64
 	StdDev      float64
 	Data        []Bucket
-	Percentiles []Percentile
+	Percentiles []Percentile `json:"Percentiles,omitempty"`
 }
 
 // NewHistogram creates a new histogram (sets up the buckets).
 // Divider value can not be zero, otherwise returns zero.
 func NewHistogram(offset float64, divider float64) *Histogram {
-	h := new(Histogram)
-	h.Offset = offset
 	if divider == 0 {
 		return nil
 	}
-	h.Divider = divider
-	h.Hdata = make([]int32, numBuckets)
-	return h
+	h := Histogram{
+		Offset:  offset,
+		Divider: divider,
+		Hdata:   make([]int32, numBuckets),
+	}
+	return &h
 }
 
 // Val2Bucket values are kept in two different structure
 // val2Bucket allows you reach between 0 and 1000 in constant time.
-// nolint: gochecknoinits // we need to init these.
+//
+//nolint:gochecknoinits // we need to init these.
 func init() {
 	val2Bucket = make([]int, maxArrayValue)
 	maxArrayValueIndex = -1
@@ -269,24 +272,32 @@ func (h *Histogram) RecordN(v float64, n int) {
 
 // Records v value to count times.
 func (h *Histogram) record(v float64, count int) {
-	// Scaled value to bucketize - we subtract epsilon because the interval
+	// Scaled value to bucketize - we used to subtract epsilon because the interval
 	// is open to the left ] start, end ] so when exactly on start it has
-	// to fall on the previous bucket. TODO add boundary tests
-	scaledVal := (v-h.Offset)/h.Divider - 0.0001
+	// to fall on the previous bucket: which is more correctly done using
+	// math.Ceil()-1 but that doesn't work... so back to epsilon distance.
+	scaledVal := (v - h.Offset) / h.Divider
 	var idx int
-	if scaledVal <= firstValue {
+	switch {
+	case scaledVal <= firstValue:
 		idx = 0
-	} else if scaledVal > lastValue {
+	case scaledVal > lastValue:
 		idx = numBuckets - 1 // last bucket is for > last value
-	} else {
-		// else we look it up
-		idx = lookUpIdx(int(scaledVal))
+	default:
+		// else we look it up (with the open interval adjustment)
+		svInt := int(scaledVal)
+		delta := scaledVal - float64(svInt)
+		if delta < 1e-12 {
+			svInt--
+		}
+		log.Debugf("v %f -> scaledVal %.17f ceil %f delta %g - svInt %d", v, scaledVal, math.Ceil(scaledVal), delta, svInt)
+		idx = lookUpIdx(svInt)
 	}
 	h.Hdata[idx] += int32(count)
 }
 
 // CalcPercentile returns the value for an input percentile
-// e.g. for 90. as input returns an estimate of the original value threshold
+// e.g., for 90. as input returns an estimate of the original value threshold
 // where 90.0% of the data is below said threshold.
 // with 3 data points 10, 20, 30; p0-p33.33 == 10, p 66.666 = 20, p100 = 30
 // p33.333 - p66.666 = linear between 10 and 20; so p50 = 15
@@ -347,7 +358,7 @@ func (h *Histogram) Export() *HistogramData {
 	// export the data of each bucket of the histogram
 	for i := 0; i <= lastIdx; i++ {
 		if h.Hdata[i] == 0 {
-			// empty bucket: skip it but update prev which is needed for next iter
+			// empty bucket: skip it, but update prev which is needed for next iteration
 			if i < numValues {
 				prev = histogramBucketValues[i]
 			}
@@ -378,7 +389,7 @@ func (h *Histogram) Export() *HistogramData {
 	return &res
 }
 
-// CalcPercentiles calculates the requested percentile and add them to the
+// CalcPercentiles calculates the requested percentile and adds them to the
 // HistogramData. Potential TODO: sort or assume sorting and calculate all
 // the percentiles in 1 pass (greater and greater values).
 func (e *HistogramData) CalcPercentiles(percentiles []float64) *HistogramData {
@@ -398,7 +409,7 @@ func (e *HistogramData) Print(out io.Writer, msg string) {
 		_, _ = fmt.Fprintf(out, "%s : no data\n", msg)
 		return
 	}
-	// the base counter part:
+	// the base counterpart:
 	_, _ = fmt.Fprintf(out, "%s : count %d avg %.8g +/- %.4g min %g max %g sum %.9g\n",
 		msg, e.Count, e.Avg, e.StdDev, e.Min, e.Max, e.Sum)
 	_, _ = fmt.Fprintln(out, "# range, mid point, percentile, count")
@@ -516,6 +527,9 @@ func ParsePercentiles(percentiles string) ([]float64, error) {
 		if err != nil {
 			return res, err
 		}
+		if p <= 0 || p >= 100 {
+			return res, fmt.Errorf("percentile %g must be > 0 and < 100", p)
+		}
 		res = append(res, p)
 	}
 	if len(res) == 0 {
@@ -535,4 +549,50 @@ func RoundToDigits(v float64, digits int) float64 {
 // Round rounds to 4 digits after the decimal point.
 func Round(v float64) float64 {
 	return RoundToDigits(v, 4)
+}
+
+// Occurrence is a type that stores the occurrences of the keys.
+// Could be directly an alias for map[string]int but keeping the
+// outer struct for parity with Counter and Histogram and to keep
+// 1.38's API.
+type Occurrence struct {
+	m map[string]int
+}
+
+// NewOccurrence create a new occurrence (map).
+func NewOccurrence() *Occurrence {
+	return &Occurrence{m: make(map[string]int)}
+}
+
+// Record records a new occurrence of the key.
+func (o *Occurrence) Record(key string) {
+	o.m[key]++
+}
+
+// AggregateAndToString aggregates the data from the object into the passed in totals map
+// and returns a string suitable for printing usage counts per key of the incoming object.
+func (o *Occurrence) AggregateAndToString(totals map[string]int) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+
+	first := true
+	onlyOne := (len(o.m) == 1)
+
+	for k, v := range o.m {
+		totals[k] += v
+		if onlyOne {
+			// Special case for single entry in the map, no [] form
+			// and the count is omitted (already printed in runner IP count case).
+			return k
+		}
+		if first {
+			first = false
+		} else {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(k)
+		sb.WriteString(fmt.Sprintf(" (%d)", v))
+	}
+	sb.WriteString("]")
+	return sb.String()
 }
