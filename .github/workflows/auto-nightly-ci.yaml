@@ -143,7 +143,7 @@ jobs:
 
       # some event, the tag is not sha, so checkout it and get sha
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
           ref: ${{ steps.get_ref.outputs.tag }}
@@ -216,7 +216,7 @@ jobs:
           echo ::set-output name=clusterName::${E2E_CLUSTER_NAME}
 
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
           ref: ${{ needs.get_ref.outputs.ref }}
