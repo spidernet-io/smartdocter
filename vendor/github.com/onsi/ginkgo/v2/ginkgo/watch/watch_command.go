@@ -22,7 +22,7 @@ func BuildWatchCommand() command.Command {
 	if err != nil {
 		panic(err)
 	}
-	interruptHandler := interrupt_handler.NewInterruptHandler(0, nil)
+	interruptHandler := interrupt_handler.NewInterruptHandler(nil)
 	interrupt_handler.SwallowSigQuit()
 
 	return command.Command{
@@ -36,6 +36,10 @@ func BuildWatchCommand() command.Command {
 			var errors []error
 			cliConfig, goFlagsConfig, errors = types.VetAndInitializeCLIAndGoConfig(cliConfig, goFlagsConfig)
 			command.AbortIfErrors("Ginkgo detected configuration issues:", errors)
+
+			if types.ReconcileFdOutputConfiguration(reporterConfig, &suiteConfig, &cliConfig) {
+				fmt.Println("--fd is incompatible with parallel runs (-p/-procs) and -randomize-all; ignoring those flags and running specs in series, in declaration order.")
+			}
 
 			watcher := &SpecWatcher{
 				cliConfig:      cliConfig,
@@ -64,6 +68,8 @@ type SpecWatcher struct {
 
 func (w *SpecWatcher) WatchSpecs(args []string, additionalArgs []string) {
 	suites := internal.FindSuites(args, w.cliConfig, false).WithoutState(internal.TestSuiteStateSkippedByFilter)
+
+	internal.VerifyCLIAndFrameworkVersion(suites)
 
 	if len(suites) == 0 {
 		command.AbortWith("Found no test suites")
@@ -127,7 +133,7 @@ func (w *SpecWatcher) WatchSpecs(args []string, additionalArgs []string) {
 			w.updateSeed()
 			w.computeSuccinctMode(len(suites))
 			for idx := range suites {
-				if w.interruptHandler.Status().Interrupted {
+				if w.interruptHandler.Status().Interrupted() {
 					return
 				}
 				deltaTracker.WillRun(suites[idx])
@@ -151,12 +157,12 @@ func (w *SpecWatcher) WatchSpecs(args []string, additionalArgs []string) {
 }
 
 func (w *SpecWatcher) compileAndRun(suite internal.TestSuite, additionalArgs []string) internal.TestSuite {
-	suite = internal.CompileSuite(suite, w.goFlagsConfig)
+	suite = internal.CompileSuite(suite, w.goFlagsConfig, false)
 	if suite.State.Is(internal.TestSuiteStateFailedToCompile) {
 		fmt.Println(suite.CompilationError.Error())
 		return suite
 	}
-	if w.interruptHandler.Status().Interrupted {
+	if w.interruptHandler.Status().Interrupted() {
 		return suite
 	}
 	suite = internal.RunCompiledSuite(suite, w.suiteConfig, w.reporterConfig, w.cliConfig, w.goFlagsConfig, additionalArgs)
