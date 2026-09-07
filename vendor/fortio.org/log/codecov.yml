@@ -1,0 +1,6 @@
+coverage:
+  ignore:
+    - "levelsDemo"
+# not used (is nothing at all used?)
+#  files:
+#    - "coverage*.out"
