@@ -18,33 +18,37 @@ var voidSender Void
 // It handles all the business logic to avoid duplication between the two servers
 
 type ServerHandler struct {
-	done              chan interface{}
-	outputDestination io.Writer
-	reporter          reporters.Reporter
-	alives            []func() bool
-	lock              *sync.Mutex
-	beforeSuiteState  BeforeSuiteState
-	parallelTotal     int
-	counter           int
-	counterLock       *sync.Mutex
-	shouldAbort       bool
+	done                   chan any
+	outputDestination      io.Writer
+	reporter               reporters.Reporter
+	alives                 []func() bool
+	lock                   *sync.Mutex
+	beforeSuiteState       BeforeSuiteState
+	reportBeforeSuiteState types.SpecState
+	parallelTotal          int
+	counter                int
+	counterLock            *sync.Mutex
+	shouldAbort            bool
 
 	numSuiteDidBegins int
 	numSuiteDidEnds   int
+	procDidEnd        []bool
 	aggregatedReport  types.Report
 	reportHoldingArea []types.SpecReport
 }
 
 func newServerHandler(parallelTotal int, reporter reporters.Reporter) *ServerHandler {
 	return &ServerHandler{
-		reporter:          reporter,
-		lock:              &sync.Mutex{},
-		counterLock:       &sync.Mutex{},
-		alives:            make([]func() bool, parallelTotal),
-		beforeSuiteState:  BeforeSuiteState{Data: nil, State: types.SpecStateInvalid},
+		reporter:         reporter,
+		lock:             &sync.Mutex{},
+		counterLock:      &sync.Mutex{},
+		alives:           make([]func() bool, parallelTotal),
+		procDidEnd:       make([]bool, parallelTotal),
+		beforeSuiteState: BeforeSuiteState{Data: nil, State: types.SpecStateInvalid},
+
 		parallelTotal:     parallelTotal,
 		outputDestination: os.Stdout,
-		done:              make(chan interface{}),
+		done:              make(chan any),
 	}
 }
 
@@ -88,6 +92,9 @@ func (handler *ServerHandler) SpecSuiteDidEnd(report types.Report, _ *Void) erro
 	defer handler.lock.Unlock()
 
 	handler.numSuiteDidEnds += 1
+	if proc := report.SuiteConfig.ParallelProcess; proc >= 1 && proc <= handler.parallelTotal {
+		handler.procDidEnd[proc-1] = true
+	}
 	if handler.numSuiteDidEnds == 1 {
 		handler.aggregatedReport = report
 	} else {
@@ -108,6 +115,13 @@ func (handler *ServerHandler) EmitOutput(output []byte, n *int) error {
 	return err
 }
 
+func (handler *ServerHandler) EmitProgressReport(report types.ProgressReport, _ *Void) error {
+	handler.lock.Lock()
+	defer handler.lock.Unlock()
+	handler.reporter.EmitProgressReport(report)
+	return nil
+}
+
 func (handler *ServerHandler) registerAlive(proc int, alive func() bool) {
 	handler.lock.Lock()
 	defer handler.lock.Unlock()
@@ -124,13 +138,44 @@ func (handler *ServerHandler) procIsAlive(proc int) bool {
 	return alive()
 }
 
+func (handler *ServerHandler) procHasFinished(proc int) bool {
+	handler.lock.Lock()
+	didEnd := handler.procDidEnd[proc-1]
+	handler.lock.Unlock()
+
+	return didEnd || !handler.procIsAlive(proc)
+}
+
 func (handler *ServerHandler) haveNonprimaryProcsFinished() bool {
 	for i := 2; i <= handler.parallelTotal; i++ {
-		if handler.procIsAlive(i) {
+		if !handler.procHasFinished(i) {
 			return false
 		}
 	}
 	return true
+}
+
+func (handler *ServerHandler) ReportBeforeSuiteCompleted(reportBeforeSuiteState types.SpecState, _ *Void) error {
+	handler.lock.Lock()
+	defer handler.lock.Unlock()
+	handler.reportBeforeSuiteState = reportBeforeSuiteState
+
+	return nil
+}
+
+func (handler *ServerHandler) ReportBeforeSuiteState(_ Void, reportBeforeSuiteState *types.SpecState) error {
+	proc1IsAlive := handler.procIsAlive(1)
+	handler.lock.Lock()
+	defer handler.lock.Unlock()
+	if handler.reportBeforeSuiteState == types.SpecStateInvalid {
+		if proc1IsAlive {
+			return ErrorEarly
+		} else {
+			return ErrorGone
+		}
+	}
+	*reportBeforeSuiteState = handler.reportBeforeSuiteState
+	return nil
 }
 
 func (handler *ServerHandler) BeforeSuiteCompleted(beforeSuiteState BeforeSuiteState, _ *Void) error {
