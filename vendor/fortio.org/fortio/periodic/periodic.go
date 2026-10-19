@@ -1,4 +1,4 @@
-// Copyright 2017 Istio Authors
+// Copyright 2017 Fortio Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,16 @@
 
 // Package periodic for fortio (from greek for load) is a set of utilities to
 // run a given task at a target rate (qps) and gather statistics - for instance
-// http requests.
+// HTTP requests.
 //
-// The main executable using the library is fortio but there
+// The main executable using the library is fortio, but there
 // is also ../histogram to use the stats from the command line and ../echosrv
-// as a very light http server that can be used to test proxies etc like
+// as a very light HTTP server that can be used to test proxies etc like
 // the Istio components.
-package periodic // import "fortio.org/fortio/periodic"
+package periodic
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -33,9 +34,10 @@ import (
 	"sync"
 	"time"
 
-	"fortio.org/fortio/log"
+	"fortio.org/fortio/jrpc"
 	"fortio.org/fortio/stats"
 	"fortio.org/fortio/version"
+	"fortio.org/log"
 )
 
 // DefaultRunnerOptions are the default values for options (do not mutate!).
@@ -50,12 +52,14 @@ var DefaultRunnerOptions = RunnerOptions{
 	Resolution:  0.001, // milliseconds
 }
 
+type ThreadID int
+
 // Runnable are the function to run periodically.
 type Runnable interface {
 	// Run returns a boolean, true for normal/success, false otherwise.
 	// with details being an optional string that can be put in the access logs.
 	// Statistics are split into two sets.
-	Run(tid int) (status bool, details string)
+	Run(ctx context.Context, id ThreadID) (status bool, details string)
 }
 
 // MakeRunners creates an array of NumThreads identical Runnable instances
@@ -66,7 +70,7 @@ func (r *RunnerOptions) MakeRunners(rr Runnable) {
 		log.Infof("Resizing runners from %d to %d", len(r.Runners), r.NumThreads)
 		r.Runners = make([]Runnable, r.NumThreads)
 	}
-	for i := 0; i < r.NumThreads; i++ {
+	for i := range r.NumThreads {
 		r.Runners[i] = rr
 	}
 }
@@ -81,26 +85,103 @@ func (r *RunnerOptions) ReleaseRunners() {
 // Aborter is the object controlling Abort() of the runs.
 type Aborter struct {
 	sync.Mutex
-	StopChan chan struct{}
+	StopChan      chan struct{}
+	StartChan     chan bool // Used to signal actual start of the run. Also (re)used in rapi/ to signal completion of the Run().
+	hasStarted    bool
+	stopRequested bool
+}
+
+// String returns a string representation of the Aborter.
+// Note this can cause data race if called without holding the lock. TODO: maybe use reentrant lock. but this is for debug only.
+func (a *Aborter) String() string {
+	return fmt.Sprintf("{Aborter %p stopChan %v startChan %v hasStarted %v stopRequested %v}",
+		a, a.StopChan, a.StartChan, a.hasStarted, a.stopRequested)
 }
 
 // Abort signals all the go routine of this run to stop.
 // Implemented by closing the shared channel. The lock is to make sure
 // we close it exactly once to avoid go panic.
-func (a *Aborter) Abort() {
+// If wait is true, waits for the run to be started before closing.
+func (a *Aborter) Abort(wait bool) {
+	a.Lock()
+	if a.StopChan == nil {
+		// Already done
+		log.LogVf("ABORT already aborted %v", a)
+		a.Unlock()
+		return
+	}
+	a.stopRequested = true
+	started := a.hasStarted
+	if started || !wait {
+		log.LogVf("ABORT Closing already started or not waiting %v", a)
+		close(a.StopChan)
+		a.StopChan = nil
+		a.Unlock()
+		if started {
+			log.LogVf("ABORT reading start channel")
+			// shouldn't block/hang, just purging/resetting - but another aborter (line 137 might have consumed it already)
+			select {
+			case b := <-a.StartChan:
+				log.LogVf("ABORT done reading start channel, got %v", b)
+			default:
+				log.LogVf("ABORT start channel empty (not quite expected)")
+			}
+			a.Lock()
+			a.hasStarted = false
+			a.Unlock()
+		}
+		return
+	}
+	// Wait & not started case:
+	a.Unlock()
+	log.LogVf("ABORT Waiting for start")
+	b := <-a.StartChan
+	log.LogVf("ABORT Done waiting for start, got %v", b)
 	a.Lock()
 	if a.StopChan != nil {
-		log.LogVf("Closing %v", a.StopChan)
+		log.LogVf("ABORT Closing wasn't started %+v", a)
 		close(a.StopChan)
 		a.StopChan = nil
 	}
+	a.hasStarted = false
+	a.Unlock()
+}
+
+// RecordStart records the start of the run. (used by httprunner in error cases to fake start so rapi stop and wait can work).
+func (a *Aborter) RecordStart() (chan struct{}, bool) {
+	a.Lock()
+	a.hasStarted = true
+	startedChan := a.StartChan
+	runnerChan := a.StopChan // need a copy to not race with assignment to nil
+	shouldAbort := a.stopRequested
+	log.LogVf("RUNNER starting... can now be Abort()ed, telling %v - %v", a, startedChan)
+	a.Unlock()
+	startedChan <- true
+	return runnerChan, shouldAbort
+}
+
+// Reset returns the aborter to original state, for (unit test) reuse.
+// Note that it doesn't recreate the closed stop chan.
+func (a *Aborter) Reset() {
+	a.Lock()
+	// Clear the "started" if we would get reused
+	select {
+	case <-a.StartChan:
+		log.LogVf("RUNNER reset: Started chan flushed for reuse")
+	default:
+		log.LogVf("RUNNER reset: we were Abort()ed already, start chan empty")
+	}
+	a.hasStarted = false
+	a.stopRequested = false
 	a.Unlock()
 }
 
 // NewAborter makes a new Aborter and initialize its StopChan.
 // The pointer should be shared. The structure is NoCopy.
 func NewAborter() *Aborter {
-	return &Aborter{StopChan: make(chan struct{}, 1)}
+	res := &Aborter{StopChan: make(chan struct{}, 1), StartChan: make(chan bool, 1)}
+	log.LogVf("NewAborter called %p %+v", res, res)
+	return res
 }
 
 // RunnerOptions are the parameters to the PeriodicRunner.
@@ -108,26 +189,28 @@ type RunnerOptions struct {
 	// Type of run (to be copied into results)
 	RunType string
 	// Array of objects to run in each thread (use MakeRunners() to clone the same one)
-	Runners []Runnable
+	Runners []Runnable `json:"-"`
 	// At which (target) rate to run the Runners across NumThreads.
 	QPS float64
 	// How long to run the test for. Unless Exactly is specified.
 	Duration time.Duration
-	// Note that this actually maps to gorountines and not actual threads
+	// Note that this actually maps to gorountines and not actual threads,
 	// but threads seems like a more familiar name to use for non go users
 	// and in a benchmarking context
-	NumThreads  int
+	NumThreads int
+	// List of percentiles to calculate.
 	Percentiles []float64
-	Resolution  float64
+	// Divider to apply to duration data in seconds. Defaults to 0.001 or 1 millisecond.
+	Resolution float64
 	// Where to write the textual version of the results, defaults to stdout
-	Out io.Writer
+	Out io.Writer `json:"-"`
 	// Extra data to be copied back to the results (to be saved/JSON serialized)
 	Labels string
 	// Aborter to interrupt a run. Will be created if not set/left nil. Or you
 	// can pass your own. It is very important this is a pointer and not a field
 	// as RunnerOptions themselves get copied while the channel and lock must
 	// stay unique (per run).
-	Stop *Aborter
+	Stop *Aborter `json:"-"`
 	// Mode where an exact number of iterations is requested. Default (0) is
 	// to not use that mode. If specified Duration is not used.
 	Exactly int64
@@ -146,9 +229,13 @@ type RunnerOptions struct {
 	// Optional Offset Duration; to offset the histogram function duration
 	Offset time.Duration
 	// Optional AccessLogger to log every request made. See AddAccessLogger.
-	AccessLogger AccessLogger
+	AccessLogger AccessLogger `json:"-"`
 	// No catch-up: if true we will do exactly the requested QPS and not try to catch up if the target is temporarily slow.
 	NoCatchUp bool
+	// Unique 96 character ID used as reference to saved JSON file. Created during Normalize().
+	ID string
+	// Time the object got first normalized, used to generate the unique ID above.
+	genTime *time.Time
 }
 
 // RunnerResults encapsulates the actual QPS observed and duration histogram.
@@ -172,10 +259,14 @@ type RunnerResults struct {
 	NoCatchUp               bool
 	RunID                   int64 // Echo back the optional run id
 	AccessLoggerInfo        string
+	// Same as RunnerOptions ID:  Unique 96 character ID used as reference to saved JSON file. Created during Normalize().
+	ID string
+	// If the run doesn't even start because of for instance an invalid host name, this will be set (all omitted on success)
+	jrpc.ServerReply
 }
 
-// HasRunnerResult is the interface implictly implemented by HTTPRunnerResults
-// and GrpcRunnerResults so the common results can ge extracted irrespective
+// HasRunnerResult is the interface implicitly implemented by HTTPRunnerResults
+// and GrpcRunnerResults, so the common results can be extracted irrespective
 // of the type.
 type HasRunnerResult interface {
 	Result() *RunnerResults
@@ -188,7 +279,7 @@ func (r *RunnerResults) Result() *RunnerResults {
 
 // PeriodicRunner let's you exercise the Function at the given QPS and collect
 // statistics and histogram about the run.
-type PeriodicRunner interface { // nolint: revive
+type PeriodicRunner interface { //nolint:revive // stutter is ok for this (can't break api anyway).
 	// Starts the run. Returns actual QPS and Histogram of function durations.
 	Run() RunnerResults
 	// Returns the options normalized by constructor - do not mutate
@@ -240,12 +331,15 @@ func (r *RunnerOptions) Normalize() {
 	if r.Runners == nil {
 		r.Runners = make([]Runnable, r.NumThreads)
 	}
+	if r.ID == "" {
+		r.GenID()
+	}
 	if r.Stop != nil {
 		return
 	}
 	// nil aborter (last normalization step:)
 	r.Stop = NewAborter()
-	runnerChan := r.Stop.StopChan // need a copy to not race with assignement to nil
+	runnerChan := r.Stop.StopChan // need a copy to not race with assignment to nil
 	go func() {
 		gAbortMutex.Lock()
 		gOutstandingRuns++
@@ -293,9 +387,9 @@ func (r *RunnerOptions) Normalize() {
 // to nil under lock so it can be called multiple times and not create panic for
 // already closed channel.
 func (r *RunnerOptions) Abort() {
-	log.LogVf("Abort called for %p %+v", r, r)
+	log.LogVf("Abort called for %p", r)
 	if r.Stop != nil {
-		r.Stop.Abort()
+		r.Stop.Abort(false)
 	}
 }
 
@@ -304,6 +398,7 @@ func newPeriodicRunner(opts *RunnerOptions) *periodicRunner {
 	r := &periodicRunner{*opts} // by default just copy the input params
 	opts.ReleaseRunners()
 	opts.Stop = nil
+	opts.genTime = nil
 	r.Normalize()
 	return r
 }
@@ -312,6 +407,7 @@ func newPeriodicRunner(opts *RunnerOptions) *periodicRunner {
 // The options will be moved and normalized to the returned object, do
 // not use the original options after this call, call Options() instead.
 // Abort() must be called if Run() is not called.
+// You can also keep a pointer to the original Aborter and use it, if needed.
 func NewPeriodicRunner(params *RunnerOptions) PeriodicRunner {
 	return newPeriodicRunner(params)
 }
@@ -332,7 +428,7 @@ func (r *periodicRunner) runQPSSetup(extra string) (requestedDuration string, re
 		// Always print that as we need ^C to interrupt, in that case the user need to notice
 		_, _ = fmt.Fprintf(r.Out, "Starting at %g qps with %d thread(s) [gomax %d] until interrupted%s\n",
 			r.QPS, r.NumThreads, runtime.GOMAXPROCS(0), extra)
-		return
+		return requestedDuration, requestedQPS, numCalls, leftOver
 	}
 	// else:
 	requestedDuration = fmt.Sprint(r.Duration)
@@ -375,7 +471,7 @@ func (r *periodicRunner) runMaxQPSSetup(extra string) (requestedDuration string,
 		// Always log something when waiting for ^C
 		_, _ = fmt.Fprintf(r.Out, "Starting at max qps with %d thread(s) [gomax %d] until interrupted%s\n",
 			r.NumThreads, runtime.GOMAXPROCS(0), extra)
-		return
+		return requestedDuration, numCalls, leftOver
 	}
 	// else:
 	if log.Log(log.Warning) {
@@ -395,14 +491,13 @@ func (r *periodicRunner) runMaxQPSSetup(extra string) (requestedDuration string,
 			_, _ = fmt.Fprintf(r.Out, "for %s%s\n", requestedDuration, extra)
 		}
 	}
-	return
+	return requestedDuration, numCalls, leftOver
 }
 
 // Run starts the runner.
-func (r *periodicRunner) Run() RunnerResults {
-	r.Stop.Lock()
-	runnerChan := r.Stop.StopChan // need a copy to not race with assignment to nil
-	r.Stop.Unlock()
+func (r *periodicRunner) Run() RunnerResults { //nolint:funlen // long in part because of the repeat on the result initialization.
+	aborter := r.Stop
+	runnerChan, shouldAbort := aborter.RecordStart()
 	useQPS := (r.QPS > 0)
 	// r.Exactly is > 0 if we use Exactly iterations instead of the duration.
 	useExactly := (r.Exactly > 0)
@@ -412,7 +507,7 @@ func (r *periodicRunner) Run() RunnerResults {
 	// AccessLogger info check
 	extra := ""
 	if r.AccessLogger != nil {
-		extra = fmt.Sprintf(" with access logger %s", r.AccessLogger.Info())
+		extra = " with access logger " + r.AccessLogger.Info()
 	}
 	requestedQPS := "max"
 	if useQPS {
@@ -434,13 +529,44 @@ func (r *periodicRunner) Run() RunnerResults {
 	errorsDuration := stats.NewHistogram(r.Offset.Seconds(), r.Resolution)
 	// Histogram and stats for Sleep time (negative offset to capture <0 sleep in their own bucket):
 	sleepTime := stats.NewHistogram(-0.001, 0.001)
+	var loggerInfo string
+	if r.AccessLogger != nil {
+		loggerInfo = r.AccessLogger.Info()
+	}
+	if shouldAbort {
+		log.Warnf("Run requested to stop before even starting")
+		aborter.Reset()
+
+		// A bit ugly this is almost the same as the big init below in the normal not early abort case.
+		return RunnerResults{
+			RunType:                 r.RunType,
+			Labels:                  r.Labels,
+			StartTime:               start,
+			RequestedQPS:            requestedQPS,
+			RequestedDuration:       requestedDuration,
+			ActualQPS:               0,
+			ActualDuration:          0,
+			NumThreads:              r.NumThreads,
+			Version:                 version.Short(),
+			DurationHistogram:       functionDuration.Export().CalcPercentiles(r.Percentiles),
+			ErrorsDurationHistogram: errorsDuration.Export().CalcPercentiles(r.Percentiles),
+			Exactly:                 r.Exactly,
+			Jitter:                  r.Jitter,
+			Uniform:                 r.Uniform,
+			NoCatchUp:               r.NoCatchUp,
+			RunID:                   r.RunID,
+			AccessLoggerInfo:        loggerInfo,
+			ID:                      r.ID,
+			ServerReply:             *jrpc.NewErrorReply("Aborted before even starting", nil),
+		}
+	}
 	if r.NumThreads <= 1 {
 		log.LogVf("Running single threaded")
 		runOne(0, runnerChan, functionDuration, errorsDuration, sleepTime, numCalls+leftOver, start, r)
 	} else {
 		var wg sync.WaitGroup
 		var fDs, eDs, sDs []*stats.Histogram
-		for t := 0; t < r.NumThreads; t++ {
+		for t := range r.NumThreads {
 			durP := functionDuration.Clone()
 			errP := errorsDuration.Clone()
 			sleepP := sleepTime.Clone()
@@ -453,13 +579,13 @@ func (r *periodicRunner) Run() RunnerResults {
 				// The first thread gets to do the additional work
 				thisNumCalls += leftOver
 			}
-			go func(t int, durP, errP, sleepP *stats.Histogram) {
+			go func(t ThreadID, durP, errP, sleepP *stats.Histogram) {
 				runOne(t, runnerChan, durP, errP, sleepP, thisNumCalls, start, r)
 				wg.Done()
-			}(t, durP, errP, sleepP)
+			}(ThreadID(t), durP, errP, sleepP)
 		}
 		wg.Wait()
-		for t := 0; t < r.NumThreads; t++ {
+		for t := range r.NumThreads {
 			functionDuration.Transfer(fDs[t])
 			errorsDuration.Transfer(eDs[t])
 			sleepTime.Transfer(sDs[t])
@@ -469,8 +595,10 @@ func (r *periodicRunner) Run() RunnerResults {
 	actualQPS := float64(functionDuration.Count) / elapsed.Seconds()
 	if log.Log(log.Warning) {
 		_, _ = fmt.Fprintf(r.Out, "Ended after %v : %d calls. qps=%.5g\n", elapsed, functionDuration.Count, actualQPS)
+		log.S(log.Info, "Run ended", log.Attr("run", r.RunID), log.Attr("elapsed", elapsed),
+			log.Attr("calls", functionDuration.Count), log.Attr("qps", actualQPS))
 	}
-	if useQPS { // nolint: nestif
+	if useQPS { //nolint:nestif // yeah.
 		percentNegative := 100. * float64(sleepTime.Hdata[0]) / float64(sleepTime.Count)
 		// Somewhat arbitrary percentage of time the sleep was behind so we
 		// may want to know more about the distribution of sleep time and warn the
@@ -490,15 +618,26 @@ func (r *periodicRunner) Run() RunnerResults {
 	if useExactly && actualCount != r.Exactly {
 		requestedDuration += fmt.Sprintf(", interrupted after %d", actualCount)
 	}
-	var loggerInfo string
-	if r.AccessLogger != nil {
-		loggerInfo = r.AccessLogger.Info()
-	}
 	result := RunnerResults{
-		r.RunType, r.Labels, start, requestedQPS, requestedDuration,
-		actualQPS, elapsed, r.NumThreads, version.Short(), functionDuration.Export().CalcPercentiles(r.Percentiles),
-		errorsDuration.Export().CalcPercentiles(r.Percentiles),
-		r.Exactly, r.Jitter, r.Uniform, r.NoCatchUp, r.RunID, loggerInfo,
+		RunType:                 r.RunType,
+		Labels:                  r.Labels,
+		StartTime:               start,
+		RequestedQPS:            requestedQPS,
+		RequestedDuration:       requestedDuration,
+		ActualQPS:               actualQPS,
+		ActualDuration:          elapsed,
+		NumThreads:              r.NumThreads,
+		Version:                 version.Short(),
+		DurationHistogram:       functionDuration.Export().CalcPercentiles(r.Percentiles),
+		ErrorsDurationHistogram: errorsDuration.Export().CalcPercentiles(r.Percentiles),
+		Exactly:                 r.Exactly,
+		Jitter:                  r.Jitter,
+		Uniform:                 r.Uniform,
+		NoCatchUp:               r.NoCatchUp,
+		RunID:                   r.RunID,
+		AccessLoggerInfo:        loggerInfo,
+		ID:                      r.ID,
+		ServerReply:             jrpc.ServerReply{Error: false},
 	}
 	if log.Log(log.Warning) {
 		result.DurationHistogram.Print(r.Out, "Aggregated Function Time")
@@ -512,11 +651,13 @@ func (r *periodicRunner) Run() RunnerResults {
 	}
 	select {
 	case <-runnerChan: // nothing
-		log.LogVf("RUNNER r.Stop already closed")
+		log.LogVf("RUNNER aborter already closed")
 	default:
-		log.LogVf("RUNNER r.Stop not already closed, closing")
+		log.LogVf("RUNNER aborter not already closed, closing")
 		r.Abort()
 	}
+	// Setup for reuse even if only unit tests are reusing runners
+	aborter.Reset()
 	return result
 }
 
@@ -524,7 +665,7 @@ func (r *periodicRunner) Run() RunnerResults {
 type AccessLoggerType int
 
 const (
-	// AccessJSON for json format of access log: {"latency":%f,"timestamp":%d,"thread":%d}.
+	// AccessJSON for JSON format of access log: {"latency":%f,"timestamp":%d,"thread":%d}.
 	AccessJSON AccessLoggerType = iota
 	// AccessInflux of influx format of access log.
 	// https://docs.influxdata.com/influxdb/v2.2/reference/syntax/line-protocol/
@@ -547,8 +688,11 @@ type fileAccessLogger struct {
 
 // AccessLogger defines an interface to report a single request.
 type AccessLogger interface {
-	// Report logs a single request to a file.
-	Report(thread int, time int64, latency float64, status bool, details string)
+	// Start is called just before each Run(). Can be used to start tracing spans for instance.
+	// returns possibly updated context.
+	Start(ctx context.Context, threadID ThreadID, iter int64, startTime time.Time) context.Context
+	// Report is called just after each Run() to logs a single request.
+	Report(ctx context.Context, threadID ThreadID, iter int64, startTime time.Time, latency float64, status bool, details string)
 	Info() string
 }
 
@@ -570,11 +714,12 @@ func (r *RunnerOptions) AddAccessLogger(filePath, format string) error {
 func NewFileAccessLogger(filePath, format string) (AccessLogger, error) {
 	var t AccessLoggerType
 	fl := strings.ToLower(format)
-	if fl == "json" {
+	switch fl {
+	case "json":
 		t = AccessJSON
-	} else if fl == "influx" {
+	case "influx":
 		t = AccessInflux
-	} else {
+	default:
 		err := fmt.Errorf("invalid format %q, should be \"json\" or \"influx\"", format)
 		log.Errf("%v", err)
 		return nil, err
@@ -593,16 +738,32 @@ func NewFileAccessLoggerByType(filePath string, accessType AccessLoggerType) (Ac
 	return &fileAccessLogger{file: f, format: accessType, info: infoStr}, nil
 }
 
+// Start is called before each Run().
+func (a *fileAccessLogger) Start(ctx context.Context, threadID ThreadID, iter int64, startTime time.Time) context.Context {
+	log.Debugf("fileAccessLogger start thread %d iter %d, %v", threadID, iter, startTime)
+	return ctx
+}
+
+// Close closes the underlying access log file.
+func (a *fileAccessLogger) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.file.Close()
+}
+
 // Report logs a single request to a file.
-func (a *fileAccessLogger) Report(thread int, time int64, latency float64, status bool, details string) {
+func (a *fileAccessLogger) Report(_ context.Context, thread ThreadID, iter int64, time time.Time,
+	latency float64, status bool, details string,
+) {
 	a.mu.Lock()
 	switch a.format {
 	case AccessInflux:
 		// https://docs.influxdata.com/influxdb/v2.2/reference/syntax/line-protocol/
-		fmt.Fprintf(a.file, "latency,thread=%d,ok=%t value=%f,details=%q %d\n", thread, status, latency, details, time)
+		fmt.Fprintf(a.file, "latency,thread=%d,ok=%t value=%f,details=%q %d\n",
+			thread, status, latency, details, time.UnixNano())
 	case AccessJSON:
-		fmt.Fprintf(a.file, "{\"latency\":%f,\"timestamp\":%d,\"thread\":%d,\"ok\":%t,\"details\":%q}\n",
-			latency, time, thread, status, details)
+		fmt.Fprintf(a.file, "{\"latency\":%f,\"timestamp\":%d,\"thread\":%d,\"iter\":%d,\"ok\":%t,\"details\":%q}\n",
+			latency, time.UnixNano(), thread, iter, status, details)
 	}
 	a.mu.Unlock()
 }
@@ -613,8 +774,9 @@ func (a *fileAccessLogger) Info() string {
 }
 
 // runOne runs in 1 go routine (or main one when -c 1 == single threaded mode).
-// nolint: gocognit, gocyclo // we should try to simplify it though.
-func runOne(id int, runnerChan chan struct{}, funcTimes, errTimes, sleepTimes *stats.Histogram,
+//
+//nolint:gocognit, gocyclo // we should try to simplify it though.
+func runOne(id ThreadID, runnerChan chan struct{}, funcTimes, errTimes, sleepTimes *stats.Histogram,
 	numCalls int64, start time.Time, r *periodicRunner,
 ) {
 	var i int64
@@ -630,7 +792,7 @@ func runOne(id int, runnerChan chan struct{}, funcTimes, errTimes, sleepTimes *s
 		delayBetweenRequest := 1. / perThreadQPS
 		// When using uniform mode, we should wait a bit relative to our QPS and thread ID.
 		// For example, with 10 threads and 1 QPS, thread 8 should delay 0.7s.
-		delaySeconds := delayBetweenRequest - (delayBetweenRequest / float64(r.NumThreads) * float64(r.NumThreads-id))
+		delaySeconds := delayBetweenRequest - (delayBetweenRequest / float64(r.NumThreads) * float64(r.NumThreads-int(id)))
 		delayDuration := time.Duration(delaySeconds * float64(time.Second))
 		start = start.Add(delayDuration)
 		log.Debugf("%s sleep %v for uniform distribution", tIDStr, delayDuration)
@@ -641,7 +803,9 @@ func runOne(id int, runnerChan chan struct{}, funcTimes, errTimes, sleepTimes *s
 			// continue normal execution
 		}
 	}
-
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ThreadID(0), id)
+	var ctx2 context.Context
 MainLoop:
 	for {
 		fStart := time.Now()
@@ -657,17 +821,21 @@ MainLoop:
 				break
 			}
 		}
-		status, details := f.Run(id)
+		ctx2 = ctx //nolint:fatcontext // only potentially mutate the original if there is an access logger (yes in the loop).
+		if r.AccessLogger != nil {
+			ctx2 = r.AccessLogger.Start(ctx, id, i, fStart)
+		}
+		status, details := f.Run(ctx2, id)
 		latency := time.Since(fStart).Seconds()
 		if r.AccessLogger != nil {
-			r.AccessLogger.Report(id, fStart.UnixNano(), latency, status, details)
+			r.AccessLogger.Report(ctx2, id, i, fStart, latency, status, details)
 		}
 		funcTimes.Record(latency)
 		if !status {
 			errTimes.Record(latency)
 		}
 		// if using QPS / pre calc expected call # mode:
-		if useQPS { // nolint: nestif
+		if useQPS { //nolint:nestif // yup.
 			for {
 				i++
 				if (useExactly || hasDuration) && i >= numCalls {
@@ -699,7 +867,14 @@ MainLoop:
 				case <-runnerChan:
 					break MainLoop
 				case <-time.After(sleepDuration):
-					// continue normal execution
+					// When behind (sleepDuration <= 0) both cases can be ready and select picks randomly,
+					// so check again for stop to not keep going after an abort.
+					select {
+					case <-runnerChan:
+						break MainLoop
+					default:
+						// continue normal execution
+					}
 				}
 				break // NoCatchUp false or sleepDuration > 0
 			}
@@ -740,24 +915,30 @@ func getJitter(t time.Duration) time.Duration {
 	if i <= 0 {
 		return time.Duration(0)
 	}
-	j := rand.Int63n(2*i+1) - i // nolint:gosec // trying to be fast not crypto secure here
+	j := rand.Int63n(2*i+1) - i //nolint:gosec // trying to be fast not crypto secure here
 	return time.Duration(j)
 }
 
-// ID Returns an id for the result: 96 bytes YYYY-MM-DD-HHmmSS_{RunID}_{alpha_labels}
+// GenID creates and set the ID for the result: 96 bytes YYYY-MM-DD-HHmmSS_{RunID}_{alpha_labels}
 // where RunID is the RunID if not 0.
 // where alpha_labels is the filtered labels with only alphanumeric characters
 // and all non alpha num replaced by _; truncated to 96 bytes.
-func (r *RunnerResults) ID() string {
-	base := formatDate(&r.StartTime)
+func (r *RunnerOptions) GenID() {
+	if r.genTime == nil {
+		now := time.Now()
+		r.genTime = &now
+	}
+	base := formatDate(r.genTime)
 	if r.RunID != 0 {
 		base += fmt.Sprintf("_%d", r.RunID)
 	}
 	if r.Labels == "" {
-		return base
+		r.ID = base
+		return
 	}
 	last := '_'
 	base += string(last)
+	var baseSb927 strings.Builder
 	for _, rune := range r.Labels {
 		if (rune >= 'a' && rune <= 'z') || (rune >= 'A' && rune <= 'Z') || (rune >= '0' && rune <= '9') {
 			last = rune
@@ -767,13 +948,15 @@ func (r *RunnerResults) ID() string {
 			}
 			last = '_'
 		}
-		base += string(last)
+		baseSb927.WriteRune(last)
 	}
+	base += baseSb927.String()
 	if last == '_' {
 		base = base[:len(base)-1]
 	}
 	if len(base) > 96 {
-		return base[:96]
+		r.ID = base[:96]
+		return
 	}
-	return base
+	r.ID = base
 }
